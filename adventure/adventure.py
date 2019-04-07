@@ -30,10 +30,10 @@ class Adventure(BaseCog):
         self.bot = bot
         self._last_trade = {}
 
-        self._adventure_actions = ["🗡", "★", "🗨", "🛐", "🏃"]
-        self._adventure_controls = {"fight": "🗡", "magic": "★", "talk": "🗨", "pray": "🛐", "run": "🏃"}
+        self._adventure_actions = ["🗡", "🌟", "🗨", "🛐", "🏃"]
+        self._adventure_controls = {"fight": "🗡", "magic": "🌟", "talk": "🗨", "pray": "🛐", "run": "🏃"}
         self._order = [
-            "head",git
+            "head",
             "neck",
             "chest",
             "gloves",
@@ -1123,7 +1123,7 @@ class Adventure(BaseCog):
                 (
                     f"{self.E(ctx.author.display_name)}, your forging roll was 🎲({roll}).\n"
                     f"The device you tinkered will have "
-                    f"{newatt * 2}🗡, {newdip * 2}🗨 and {newint * 2}★ and be {hand}."
+                    f"{newatt * 2}🗡, {newdip * 2}🗨 and {newint * 2}🌟 and be {hand}."
                 )
             )
         else:
@@ -1131,7 +1131,7 @@ class Adventure(BaseCog):
                 (
                     f"{self.E(ctx.author.display_name)}, your forging roll was 🎲({roll}).\n"
                     "The device you tinkered will have "
-                    f"{newatt}🗡, {newdip}🗨 and {newint}★ and be {hand}."
+                    f"{newatt}🗡, {newdip}🗨 and {newint}🌟 and be {hand}."
                 )
             )
         await ctx.send(
@@ -2012,7 +2012,7 @@ class Adventure(BaseCog):
             elif spend == "diplomacy":
                 c.skill["pool"] -= 1
                 c.skill["cha"] += 1
-            elif spend == "intelligence:
+            elif spend == "intelligence":
                 c.skill["pool"] -= 1
                 c.skill["int"] += 1
             await self.config.user(ctx.author).set(c._to_json())
@@ -2279,7 +2279,7 @@ class Adventure(BaseCog):
         action = {v: k for k, v in self._adventure_controls.items()}[str(reaction.emoji)]
         log.debug(action)
         session = self._sessions[user.guild.id]
-        for x in ["fight", "talk", "pray", "run"]:
+        for x in ["fight", "magic", "talk", "pray", "run"]:
             if x == action:
                 continue
             if user in getattr(session, x):
@@ -2744,7 +2744,7 @@ class Adventure(BaseCog):
                     attack += roll - bonus + int_value
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) +💥{bonus} +★{str(int_value)} | "
+                        f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} | "
                     )
             elif roll == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
                 ability = ""
@@ -2760,12 +2760,12 @@ class Adventure(BaseCog):
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +★{str(int_value)} | "
+                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} | "
                 )
             else:
                 attack += roll + int_value
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +★{str(int_value)} | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} | "
                 )
         msg = msg + report + "\n"
         for user in fumblelist:
@@ -2806,7 +2806,7 @@ class Adventure(BaseCog):
                     fumblelist.append(user)
                     msg += (
                         f"{bold(self.E(user.display_name))}'s sermon offended the mighty {god}. "
-                        f"(-{5 * len(fight_list)}🗡/-{5 * len(talk_list)}🗨/-{5 * len(magic_list)}★)\n"
+                        f"(-{5 * len(fight_list)}🗡/-{5 * len(talk_list)}🗨/-{5 * len(magic_list)}🌟)\n"
                     )
 
                 elif roll in range(2, 10):
@@ -2815,7 +2815,7 @@ class Adventure(BaseCog):
                     intelligence += len(magic_list)
                     msg += (
                         f"{bold(self.E(user.display_name))} blessed you all in {god}'s name. "
-                        f"(+{len(fight_list)}🗡/+{len(talk_list)}🗨/+{len(magic_list)}★)\n"
+                        f"(+{len(fight_list)}🗡/+{len(talk_list)}🗨/+{len(magic_list)}🌟)\n"
                     )
 
                 elif roll in range(11, 19):
@@ -2824,7 +2824,7 @@ class Adventure(BaseCog):
                     intelligence += 5 * len(magic_list)
                     msg += (
                         f"{bold(self.E(user.display_name))} blessed you all in {god}'s name. "
-                        f"(+{5 * len(fight_list)}🗡/+{5 * len(talk_list)}🗨/+{5 * len(magic_list)}★)\n"
+                        f"(+{5 * len(fight_list)}🗡/+{5 * len(talk_list)}🗨/+{5 * len(magic_list)}🌟)\n"
                     )
 
                 else:
@@ -2834,7 +2834,7 @@ class Adventure(BaseCog):
                     msg += (
                         f"{bold(self.E(user.display_name))} "
                         f"turned into an avatar of mighty {god}. "
-                        f"(+{10 * len(fight_list)}🗡/+{10 * len(talk_list)}🗨/+{10 * len(magic_list)}★)\n"
+                        f"(+{10 * len(fight_list)}🗡/+{10 * len(talk_list)}🗨/+{10 * len(magic_list)}🌟)\n"
                     )
             else:
                 roll = random.randint(1, 4)
@@ -2851,7 +2851,7 @@ class Adventure(BaseCog):
                     msg += (
                         f"{bold(self.E(user.display_name))}'s prayer "
                         f"called upon the mighty {god} to help you. "
-                        f"(+{10 * len(fight_list)}🗡/+{10 * len(talk_list)}🗨/+{10 * len(magic_list)}★)\n"
+                        f"(+{10 * len(fight_list)}🗡/+{10 * len(talk_list)}🗨/+{10 * len(magic_list)}🌟)\n"
                     )
                 else:
                     fumblelist.append(user)
