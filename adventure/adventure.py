@@ -2772,7 +2772,7 @@ class Adventure(BaseCog):
             if user in session.fight:
                 session.fight.remove(user)
             elif user in session.magic:
-                session.fight.remove(user)
+                session.magic.remove(user)
         return (fumblelist, critlist, attack, msg)
 
     async def handle_pray(self, guild_id, fumblelist, attack, diplomacy, intelligence):
@@ -2931,7 +2931,7 @@ class Adventure(BaseCog):
                     continue
                 try:
                     current_item = getattr(c, slot)
-                    if item == str(current_item):
+                    if item in str(current_item):
                         failed = False
                         break
                 except KeyError:
