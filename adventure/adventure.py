@@ -2728,7 +2728,7 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
-                    attack += int((roll - bonus + att_value) * pdef)
+                    attack += int((roll - bonus + att_value) / pdef)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
                         f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{attack} dmg | "
@@ -2743,14 +2743,14 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
-                attack += int((roll + bonus + att_value) * pdef)
+                attack += int((roll + bonus + att_value) / pdef)
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
                     f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{attack} dmg | "
                 )
             else:
-                attack += int((roll + att_value) * pdef)
+                attack += int((roll + att_value) / pdef)
                 report += (
                     f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did 🗡{attack} dmg | "
                 )
@@ -2770,7 +2770,7 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                    magic += int((roll - bonus + int_value) * mdef)
+                    magic += int((roll - bonus + int_value) / mdef)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
                         f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{magic} dmg | "
@@ -2785,14 +2785,14 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                magic += int((roll + bonus + int_value) * mdef)
+                magic += int((roll + bonus + int_value) / mdef)
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
                     f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{magic} dmg | "
                 )
             else:
-                magic += int((roll + int_value) * mdef)
+                magic += int((roll + int_value) / mdef)
                 report += (
                     f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did 🌟{magic} dmg | "
                 )
