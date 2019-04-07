@@ -2859,7 +2859,7 @@ class Adventure(BaseCog):
         for user in fumblelist:
             if user in pray_list:
                 pray_list.remove(user)
-        return (fumblelist, attack, diplomacy, intelligence msg)
+        return (fumblelist, attack, diplomacy, intelligence, msg)
 
     async def handle_talk(self, guild_id, fumblelist, critlist, diplomacy):
         session = self._sessions[guild_id]
