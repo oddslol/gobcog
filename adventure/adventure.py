@@ -241,8 +241,8 @@ class Adventure(BaseCog):
                         (
                             f"{self.E(ctx.author.display_name)}'s new stats: "
                             f"Attack: {c.att} [{c.skill['att']}], "
-                            f"Diplomacy: {c.cha} [{c.skill['cha']}], "
-                            f"Intelligence: {c.int} [{c.skill['int']}]."
+                            f"Intelligence: {c.int} [{c.skill['int']}], "
+                            f"Diplomacy: {c.cha} [{c.skill['cha']}]."
                         ),
                         lang="css",
                     )
@@ -423,8 +423,8 @@ class Adventure(BaseCog):
             trade_talk = box(
                 (
                     f"{self.E(ctx.author.display_name)} wants to sell "
-                    f"{item}. (Attack: {str(item.att)}, "
-                    f"Charisma: {str(item.cha)}, Intelligence: {str(item.int)}) "
+                    f"{item}. (Attack: {str(item.att)}, Intelligence: {str(item.int)}), "
+                    f"Charisma: {str(item.cha)} "
                     f"[{hand}])\n{self.E(buyer.display_name)}, "
                     f"do you want to buy this item for {str(asking)} {currency_name}?"
                 ),
@@ -671,8 +671,8 @@ class Adventure(BaseCog):
                 (
                     f"{self.E(ctx.author.display_name)}'s new stats: "
                     f"Attack: {c.__stat__('att')} [{c.skill['att']}], "
-                    f"Diplomacy: {c.__stat__('cha')} [{c.skill['cha']}], "
-                    f"Intelligence: {c.__stat__('int')} [{c.skill['int']}]."
+                    f"Intelligence: {c.__stat__('int')} [{c.skill['int']}], "
+                    f"Diplomacy: {c.__stat__('cha')} [{c.skill['cha']}]."
                 ),
                 lang="css",
             )
@@ -2341,7 +2341,7 @@ class Adventure(BaseCog):
         calc_msg = await ctx.send("Calculating...")
         attack = 0
         diplomacy = 0
-        intelligence = 0
+        magic = 0
         fumblelist: list = []
         critlist: list = []
         failed = False
@@ -2361,34 +2361,36 @@ class Adventure(BaseCog):
         run_list = session.run
         magic_list = session.magic
 
-        attack, diplomacy, intelligence, run_msg = await self.handle_run(ctx.guild.id, attack, diplomacy, intelligence)
+        challenge = session.challenge
+
+        attack, diplomacy, magic, run_msg = await self.handle_run(ctx.guild.id, attack, diplomacy, magic)
         failed = await self.handle_basilisk(ctx, failed)
-        fumblelist, attack, diplomacy, intelligence, pray_msg = await self.handle_pray(
-            ctx.guild.id, fumblelist, attack, diplomacy, intelligence
+        fumblelist, attack, diplomacy, magic, pray_msg = await self.handle_pray(
+            ctx.guild.id, fumblelist, attack, diplomacy, magic
         )
         fumblelist, critlist, diplomacy, talk_msg = await self.handle_talk(
             ctx.guild.id, fumblelist, critlist, diplomacy
         )
-        fumblelist, critlist, attack, fight_msg = await self.handle_fight(
-            ctx.guild.id, fumblelist, critlist, attack
+
+        # need to pass challenge because we need to query MONSTERS[challenge]["pdef"] (and mdef)
+        fumblelist, critlist, attack, magic, fight_msg = await self.handle_fight(
+            ctx.guild.id, fumblelist, critlist, attack, magic, challenge
         )
 
-        result_msg = run_msg + pray_msg + talk_msg + fight_msg
-
-        challenge = session.challenge
+        result_msg = run_msg + pray_msg + talk_msg + fight_msg        
         challenge_attrib = session.attribute
 
-        strength = self.MONSTERS[challenge]["str"] * self.ATTRIBS[challenge_attrib][0]
+        hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[challenge_attrib][0]
         dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[challenge_attrib][1]
 
-        slain = attack >= strength
+        slain = (attack + magic) >= hp
         persuaded = diplomacy >= dipl
         damage_str = ""
         diplo_str = ""
         if attack:
             damage_str = (
                 f"The group {'hit the' if not slain else 'killed the'} {challenge} "
-                f"**({attack}/{int(strength)})**.\n"
+                f"**({attack}/{int(hp)})**.\n"
             )
         if diplomacy:
             diplo_str = (
@@ -2435,7 +2437,7 @@ class Adventure(BaseCog):
         await calc_msg.delete()
         text = ""
         if slain or persuaded and not failed:
-            CR = strength + dipl
+            CR = hp + dipl
             treasure = [0, 0, 0, 0]
             if (
                 CR >= 80 or session.miniboss
@@ -2506,13 +2508,13 @@ class Adventure(BaseCog):
                 f"\n{humanize_list(loss_list)} to repay a passing "
                 "cleric that resurrected the group."
             )
-        amount = (strength + dipl) * people
+        amount = (hp + dipl) * people
         if people == 1:
             if slain:
                 group = fighters if len(fight_list) == 1 else wizards
                 text = f"{bold(group)} has slain the {session.challenge} in an epic battle!"
                 text += await self._reward(
-                    ctx, fight_list + magic_list + pray_list, amount, round((attack / strength) * 0.2), treasure
+                    ctx, fight_list + magic_list + pray_list, amount, round((attack / hp) * 0.2), treasure
                 )
 
             if persuaded:
@@ -2589,7 +2591,7 @@ class Adventure(BaseCog):
                     ctx,
                     fight_list + magic_list + talk_list + pray_list,
                     amount,
-                    round(((attack / strength) + (diplomacy / dipl)) * 0.2),
+                    round(((attack / hp) + (diplomacy / dipl)) * 0.2),
                     treasure,
                 )
 
@@ -2629,7 +2631,7 @@ class Adventure(BaseCog):
                         group = fighters if len(fight_list) > 0 else wizards
                         text = f"{bold(group)} killed the {session.challenge} in an epic fight."
                 text += await self._reward(
-                    ctx, fight_list + magic_list + pray_list, amount, round((attack / strength) * 0.2), treasure
+                    ctx, fight_list + magic_list + pray_list, amount, round((attack / hp) * 0.2), treasure
                 )
 
             if not slain and not persuaded:
@@ -2664,7 +2666,7 @@ class Adventure(BaseCog):
         await self._data_check(ctx)
         session.participants = set(fight_list + magic_list + talk_list + pray_list + run_list + fumblelist)
 
-    async def handle_run(self, guild_id, attack, diplomacy, intelligence):
+    async def handle_run(self, guild_id, attack, diplomacy, magic):
         runners = []
         msg = ""
         session = self._sessions[guild_id]
@@ -2672,21 +2674,47 @@ class Adventure(BaseCog):
             for user in session.run:
                 attack -= 1
                 diplomacy -= 1
-                intelligence -= 1
+                magic -= 1
                 runners.append(self.E(user.display_name))
             msg += f"{bold(humanize_list(runners))} just ran away.\n"
-        return (attack, diplomacy, intelligence, msg)
+        return (attack, diplomacy, magic, msg)
 
-    async def handle_fight(self, guild_id, fumblelist, critlist, attack):
+    async def handle_fight(self, guild_id, fumblelist, critlist, attack, magic, challenge):
         session = self._sessions[guild_id]
+        pdef = self.MONSTERS[challenge]["pdef"]
+        mdef = self.MONSTERS[challenge]["mdef"]
+        # make sure we pass this check first
         if len(session.fight + session.magic) >= 1:
-            report = "Attack Party: "
             msg = ""
+            if len(session.fight) >= 1:
+                if pdef > 0:
+                    msg+= f"Swords slice through this monster like a {bold("hot knife through butter!")}"
+                elif pdef >= 0.75 and pdef < 1:
+                    msg+= f"This monster's hide is {bold("soft and easy")} to slice!"
+                elif pdef > 1:
+                    msg+= f"This monster has {bold("thick")} armour!"
+                elif pdef >= 1.25:
+                    msg+= f"This monster has {bold("extremely tough")} armour!"
+                elif pdef >= 1.5:
+                    msg+= f"Swords bounce of this monster as it's skin is {bold("almost impenetrable!")}"
+            if len(session.magic) >= 1:
+                if mdef > 0:
+                    msg+= f"Magic spells are {bold("hugely effective")} against this monster!"
+                elif mdef >= 0.75 and mdef < 1:
+                    msg+= f"This monster's hide {bold("melts to magic!")}"
+                elif mdef > 1:
+                    msg+= f"This monster has increased {bold("magic resistance!")}"
+                elif mdef >= 1.25:
+                    msg+= f"This monster has {bold("substantial magic resistance!")}"
+                elif mdef >= 1.5:
+                    msg+= f"Magic? Pfft, your magic is {bold("no match")} for this creature!"
+            report = "Attack Party: "
         else:
             return (fumblelist, critlist, attack, "")
 
         for user in session.fight:
             roll = random.randint(1, 20)
+            crit_roll = random.randint(1, 20)
             try:
                 c = await Character._from_json(self.config, user)
             except Exception:
@@ -2700,14 +2728,14 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
-                    attack += roll - bonus + att_value
+                    attack += int((roll - bonus + att_value) * pdef)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} | "
+                        f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{attack} dmg | "
                     )
-            elif random.randint(1, 20) == 20 or (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]):
+            elif crit_roll == 20 or (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]):
                 ability = ""
-                if roll == 20:
+                if crit_roll == 20:
                     msg += f"{bold(self.E(user.display_name))} landed a critical hit.\n"
                     critlist.append(user)
                 if c.heroclass["ability"]:
@@ -2715,19 +2743,20 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
-                attack += roll + bonus + att_value
+                attack += int((roll + bonus + att_value) * pdef)
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} | "
+                    f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{attack} dmg | "
                 )
             else:
-                attack += roll + att_value
+                attack += int((roll + att_value) * pdef)
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did 🗡{attack} dmg | "
                 )
         for user in session.magic:
             roll = random.randint(1, 20)
+            crit_roll = random.randint(1, 20)
             try:
                 c = await Character._from_json(self.config, user)
             except Exception:
@@ -2735,37 +2764,37 @@ class Adventure(BaseCog):
                 continue
             int_value = c.int + c.skill["int"]
             if roll == 1:
-                msg += f"{bold(self.E(user.display_name))} fumbled the attack.\n"
+                msg += f"{bold(self.E(user.display_name))} almost set themselves on fire.\n"
                 fumblelist.append(user)
                 if c.heroclass["name"] == "Wizard" and c.heroclass["ability"]:
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                    attack += roll - bonus + int_value
+                    magic += int((roll - bonus + int_value) * mdef)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} | "
+                        f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{magic} dmg | "
                     )
-            elif random.randint(1, 20) == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
+            elif crit_roll == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
                 ability = ""
-                if roll == 20:
-                    msg += f"{bold(self.E(user.display_name))} landed a critical hit.\n"
+                if crit_roll == 20:
+                    msg += f"{bold(self.E(user.display_name))} had a surge of energy.\n"
                     critlist.append(user)
                 if c.heroclass["ability"]:
-                    ability = "🗯️"
+                    ability = "⚡️"
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                attack += roll + bonus + int_value
+                magic += int((roll + bonus + int_value) * mdef)
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} | "
+                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{magic} dmg | "
                 )
             else:
-                attack += roll + int_value
+                magic += int((roll + int_value) * mdef)
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did 🌟{magic} dmg | "
                 )
         msg = msg + report + "\n"
         for user in fumblelist:
@@ -2773,9 +2802,9 @@ class Adventure(BaseCog):
                 session.fight.remove(user)
             elif user in session.magic:
                 session.magic.remove(user)
-        return (fumblelist, critlist, attack, msg)
+        return (fumblelist, critlist, attack, magic, msg)
 
-    async def handle_pray(self, guild_id, fumblelist, attack, diplomacy, intelligence):
+    async def handle_pray(self, guild_id, fumblelist, attack, diplomacy, magic):
         session = self._sessions[guild_id]
         talk_list = session.talk
         pray_list = session.pray
@@ -2802,7 +2831,7 @@ class Adventure(BaseCog):
                 if roll == 1:
                     attack -= 5 * len(fight_list)
                     diplomacy -= 5 * len(talk_list)
-                    intelligence -= 5 * len(magic_list)
+                    magic -= 5 * len(magic_list)
                     fumblelist.append(user)
                     msg += (
                         f"{bold(self.E(user.display_name))}'s sermon offended the mighty {god}. "
@@ -2812,7 +2841,7 @@ class Adventure(BaseCog):
                 elif roll in range(2, 10):
                     attack += len(fight_list)
                     diplomacy += len(talk_list)
-                    intelligence += len(magic_list)
+                    magic += len(magic_list)
                     msg += (
                         f"{bold(self.E(user.display_name))} blessed you all in {god}'s name. "
                         f"(+{len(fight_list)}🗡/+{len(talk_list)}🗨/+{len(magic_list)}🌟)\n"
@@ -2821,7 +2850,7 @@ class Adventure(BaseCog):
                 elif roll in range(11, 19):
                     attack += 5 * len(fight_list)
                     diplomacy += 5 * len(talk_list)
-                    intelligence += 5 * len(magic_list)
+                    magic += 5 * len(magic_list)
                     msg += (
                         f"{bold(self.E(user.display_name))} blessed you all in {god}'s name. "
                         f"(+{5 * len(fight_list)}🗡/+{5 * len(talk_list)}🗨/+{5 * len(magic_list)}🌟)\n"
@@ -2830,7 +2859,7 @@ class Adventure(BaseCog):
                 else:
                     attack += 10 * len(fight_list)
                     diplomacy += 10 * len(talk_list)
-                    intelligence += 10 * len(magic_list)
+                    magic += 10 * len(magic_list)
                     msg += (
                         f"{bold(self.E(user.display_name))} "
                         f"turned into an avatar of mighty {god}. "
@@ -2847,7 +2876,7 @@ class Adventure(BaseCog):
                 if roll == 4:
                     attack += 10 * len(fight_list)
                     diplomacy += 10 * len(talk_list)
-                    intelligence += 10 * len(magic_list)
+                    magic += 10 * len(magic_list)
                     msg += (
                         f"{bold(self.E(user.display_name))}'s prayer "
                         f"called upon the mighty {god} to help you. "
@@ -2859,7 +2888,7 @@ class Adventure(BaseCog):
         for user in fumblelist:
             if user in pray_list:
                 pray_list.remove(user)
-        return (fumblelist, attack, diplomacy, intelligence, msg)
+        return (fumblelist, attack, diplomacy, magic, msg)
 
     async def handle_talk(self, guild_id, fumblelist, critlist, diplomacy):
         session = self._sessions[guild_id]
@@ -3128,7 +3157,7 @@ class Adventure(BaseCog):
 
             chest_msg2 = (
                 f"{self.E(user.display_name)} found a {item}. (Attack: "
-                f"{str(item.att)}, Charisma: {str(item.cha)}, Intelligence: {str(item.int)} [{slot}])"
+                f"{str(item.att)}, Intelligence: {str(item.int)} [{slot}], Charisma: {str(item.cha)})"
             )
             await open_msg.edit(
                 content=box(
@@ -3142,7 +3171,7 @@ class Adventure(BaseCog):
         else:
             chest_msg2 = (
                 f"The {user} found a {item}. (Attack: "
-                f"{str(item.att)}, Charisma: {str(item.cha)}, Intelligence: {str(item.int)} [{slot}])"
+                f"{str(item.att)}, Intelligence: {str(item.int)} [{slot}], Charisma: {str(item.cha)})"
             )
             await open_msg.edit(
                 content=box(
@@ -3374,8 +3403,8 @@ class Adventure(BaseCog):
                     intel = item["item"]["int"]
                 text += box(
                     (
-                        f"\n[{str(index + 1)}] {item['itemname']} (Attack: {str(att)}, "
-                        f"Charisma: {str(cha)}, Intelligence: {str(intel)} [{hand}]) for {item['price']} {currency_name}."
+                        f"\n[{str(index + 1)}] {item['itemname']} (Attack: {str(att)}, Intelligence: {str(intel)}, "
+                        f"Charisma: {str(cha)} [{hand}]) for {item['price']} {currency_name}."
                     ),
                     lang="css",
                 )
