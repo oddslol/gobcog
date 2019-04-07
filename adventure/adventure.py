@@ -2699,13 +2699,13 @@ class Adventure(BaseCog):
                 if c.heroclass["name"] == "Berserker" and c.heroclass["ability"]:
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
-                    bonus = min(bonus_roll, int((roll + att_value) * bonus_multi))
+                    bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
                     attack += roll - bonus + att_value
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
                         f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} | "
                     )
-            elif roll == 20 or (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]):
+            elif random.randint(1, 20) == 20 or (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]):
                 ability = ""
                 if roll == 20:
                     msg += f"{bold(self.E(user.display_name))} landed a critical hit.\n"
@@ -2714,7 +2714,7 @@ class Adventure(BaseCog):
                     ability = "🗯️"
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
-                bonus = min(bonus_roll, int((roll + att_value) * bonus_multi))
+                bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
                 attack += roll + bonus + att_value
                 bonus = ability + str(bonus)
                 report += (
@@ -2733,20 +2733,20 @@ class Adventure(BaseCog):
             except Exception:
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
-            int_value = c.att + c.skill["int"]
+            int_value = c.int + c.skill["int"]
             if roll == 1:
                 msg += f"{bold(self.E(user.display_name))} fumbled the attack.\n"
                 fumblelist.append(user)
                 if c.heroclass["name"] == "Wizard" and c.heroclass["ability"]:
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
-                    bonus = min(bonus_roll, int((roll + int_value) * bonus_multi))
+                    bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
                     attack += roll - bonus + int_value
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
                         f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} | "
                     )
-            elif roll == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
+            elif random.randint(1, 20) == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
                 ability = ""
                 if roll == 20:
                     msg += f"{bold(self.E(user.display_name))} landed a critical hit.\n"
@@ -2755,7 +2755,7 @@ class Adventure(BaseCog):
                     ability = "🗯️"
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
-                bonus = min(bonus_roll, int((roll + int_value) * bonus_multi))
+                bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
                 attack += roll + bonus + int_value
                 bonus = ability + str(bonus)
                 report += (

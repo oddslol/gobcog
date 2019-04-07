@@ -32,6 +32,7 @@ class Item:
         self.name: str = kwargs.pop("name")
         self.slot: List[str] = kwargs.pop("slot")
         self.att: int = kwargs.pop("att")
+        self.int int = kwargs.pop("int")
         self.cha: int = kwargs.pop("cha")
         self.rarity: str = kwargs.pop("rarity")
         self.dex: int = kwargs.pop("dex")
@@ -85,14 +86,18 @@ class Item:
             name = name.replace("{.:'", "").replace("':.}", "")
             rarity = "forged"
         rarity = data["rarity"] if "rarity" in data else rarity
+        att = data["att"] if "att" in data else 0
         dex = data["dex"] if "dex" in data else 0
+        inter = data["int"] if "int" in data else 0
+        cha = data["cha"] if "cha" in data else 0
         luck = data["luck"] if "luck" in data else 0
         owned = data["owned"] if "owned" in data else 1
         item_data = {
             "name": name,
             "slot": data["slot"],
-            "att": data["att"],
-            "cha": data["cha"],
+            "att": att,
+            "int": inter,
+            "cha": cha,
             "rarity": rarity,
             "dex": dex,
             "luck": luck,
@@ -106,6 +111,7 @@ class Item:
                 "name": self.name,
                 "slot": self.slot,
                 "att": self.att,
+                "int": self.int,
                 "cha": self.cha,
                 "rarity": self.rarity,
                 "dex": self.dex,
