@@ -32,7 +32,7 @@ class Item:
         self.name: str = kwargs.pop("name")
         self.slot: List[str] = kwargs.pop("slot")
         self.att: int = kwargs.pop("att")
-        self.int int = kwargs.pop("int")
+        self.int: int = kwargs.pop("int")
         self.cha: int = kwargs.pop("cha")
         self.rarity: str = kwargs.pop("rarity")
         self.dex: int = kwargs.pop("dex")
