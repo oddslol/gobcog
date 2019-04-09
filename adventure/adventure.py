@@ -1416,7 +1416,7 @@ class Adventure(BaseCog):
             currency_name = await bank.get_currency_name(ctx.guild)
             if str(currency_name).startswith("<"):
                 currency_name = "credits"
-            spend = round(bal * 0.2)
+            spend = 10000
             class_msg = await ctx.send(
                 box(
                     (
@@ -1454,7 +1454,7 @@ class Adventure(BaseCog):
                     )
                 )
                 return await self._clear_react(class_msg)
-            if bal < 500:
+            if bal < spend:
                 await class_msg.edit(content=broke)
                 return await self._clear_react(class_msg)
             try:
@@ -2038,8 +2038,8 @@ class Adventure(BaseCog):
                     f"{self.E(ctx.author.display_name)}, "
                     f"you currently have {bold(str(c.skill['pool']))} "
                     "unspent skillpoints.\n"
-                    "If you want to put them towards a permanent attack or diplomacy bonus, use "
-                    f"`{ctx.prefix}skill attack` or `{ctx.prefix}skill diplomacy`"
+                    "If you want to put them towards a permanent attack, diplomacy or intelligence bonus, use "
+                    f"`{ctx.prefix}skill attack`, `{ctx.prefix}skill diplomacy` or  `{ctx.prefix}skill intelligence`"
                 )
             )
         else:
