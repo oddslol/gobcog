@@ -612,7 +612,7 @@ class Adventure(BaseCog):
         currency_name = await bank.get_currency_name(ctx.guild)
         if str(currency_name).startswith("<"):
             currency_name = "credits"
-        spend = 1000
+        spend = 2000
         msg = await ctx.send(
             box(
                 (
@@ -818,9 +818,9 @@ class Adventure(BaseCog):
     async def convert(self, ctx, box_rarity: str, amount: int = 1):
         """Convert normal, rare or epic chests.
 
-        Trade 5 normal treasure chests for 1 rare treasure chest.
-        Trade 4 rare treasure chests for 1 epic treasure chest.
-        Trade 3 epic treasure chests for 1 legendary treasure chest.
+        Trade 6 normal treasure chests for 1 rare treasure chest.
+        Trade 5 rare treasure chests for 1 epic treasure chest.
+        Trade 4 epic treasure chests for 1 legendary treasure chest.
         """
 
         # Thanks to flare#0001 for the idea and writing the first instance of this
@@ -834,13 +834,13 @@ class Adventure(BaseCog):
         else:
             plural = ""
         if box_rarity.lower() == "normal":
-            if c.treasure[0] >= (5 * amount):
-                c.treasure[0] -= 5 * amount
+            if c.treasure[0] >= (6 * amount):
+                c.treasure[0] -= 6 * amount
                 c.treasure[1] += 1 * amount
                 await ctx.send(
                     box(
                         (
-                            f"Successfully converted {(5 * amount)} normal treasure "
+                            f"Successfully converted {(6 * amount)} normal treasure "
                             f"chests to {(1 * amount)} rare treasure chest{plural}. "
                             f"\n{self.E(ctx.author.display_name)} "
                             f"now owns {c.treasure[0]} normal, "
@@ -853,17 +853,17 @@ class Adventure(BaseCog):
                 await self.config.user(ctx.author).set(c._to_json())
             else:
                 await ctx.send(
-                    f"{self.E(ctx.author.display_name)}, you do not have {(5 * amount)} "
+                    f"{self.E(ctx.author.display_name)}, you do not have {(6 * amount)} "
                     "normal treasure chests to convert."
                 )
         elif box_rarity.lower() == "rare":
-            if c.treasure[1] >= (4 * amount):
-                c.treasure[1] -= 4 * amount
+            if c.treasure[1] >= (5 * amount):
+                c.treasure[1] -= 5 * amount
                 c.treasure[2] += 1 * amount
                 await ctx.send(
                     box(
                         (
-                            f"Successfully converted {(4 * amount)} rare treasure "
+                            f"Successfully converted {(5 * amount)} rare treasure "
                             f"chests to {(1 * amount)} epic treasure chest{plural}. "
                             f"\n{self.E(ctx.author.display_name)} "
                             f"now owns {c.treasure[0]} normal, "
@@ -876,17 +876,17 @@ class Adventure(BaseCog):
                 await self.config.user(ctx.author).set(c._to_json())
             else:
                 await ctx.send(
-                    f"{self.E(ctx.author.display_name)}, you do not have {(4 * amount)} "
+                    f"{self.E(ctx.author.display_name)}, you do not have {(5 * amount)} "
                     "rare treasure chests to convert."
                 )
         elif box_rarity.lower() == "epic":
-            if c.treasure[2] >= (3 * amount):
-                c.treasure[2] -= 3 * amount
+            if c.treasure[2] >= (4 * amount):
+                c.treasure[2] -= 4 * amount
                 c.treasure[3] += 1 * amount
                 await ctx.send(
                     box(
                         (
-                            f"Successfully converted {(3 * amount)} epic treasure "
+                            f"Successfully converted {(4 * amount)} epic treasure "
                             f"chests to {(1 * amount)} legendary treasure chest{plural}. "
                             f"\n{self.E(ctx.author.display_name)} "
                             f"now owns {c.treasure[0]} normal, "
@@ -899,7 +899,7 @@ class Adventure(BaseCog):
                 await self.config.user(ctx.author).set(c._to_json())
             else:
                 await ctx.send(
-                    f"{self.E(ctx.author.display_name)}, you do not have {(3 * amount)} "
+                    f"{self.E(ctx.author.display_name)}, you do not have {(4 * amount)} "
                     "epic treasure chests to convert."
                 )
         else:
@@ -1342,6 +1342,14 @@ class Adventure(BaseCog):
             return await ctx.send("This command is not available in DM's on this bot.")
 
         classes = {
+            "Wizard": {
+                "name": "Wizard",
+                "ability": False,
+                "desc": (
+                    "Wizards have the option to focus and add big bonuses to their magic, "
+                    "but their focus can sometimes go astray...\nUse the focus command when attacking in an adventure."
+                ),
+            },
             "Tinkerer": {
                 "name": "Tinkerer",
                 "ability": False,
@@ -1391,7 +1399,7 @@ class Adventure(BaseCog):
             await ctx.send(
                 (
                     f"So you feel like taking on a class, **{self.E(ctx.author.display_name)}**?\n"
-                    "Available classes are: Tinkerer, Berserker, Cleric, Ranger and Bard.\n"
+                    "Available classes are: Tinkerer, Berserker, Wizard, Cleric, Ranger and Bard.\n"
                     f"Use `{ctx.prefix}heroclass name-of-class` to choose one."
                 )
             )
@@ -1942,10 +1950,41 @@ class Adventure(BaseCog):
             )
 
     @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=3600, type=commands.BucketType.user)
+    async def focus(self, ctx):
+        """[Wizard Class Only]
+
+        This allows a Wizard to add substantial magic bonuses for one battle.
+        (1h cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Wizard":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Wizard to do this."
+            )
+        else:
+            if c.heroclass["ability"] is True:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            c.heroclass["ability"] = True
+            await self.config.user(ctx.author).set(c._to_json())
+            await ctx.send(
+                f"{bold(ctx.author.display_name)} is focusing all of their energy...⚡️"
+            )
+
+    @commands.command()
     async def skill(self, ctx, spend: str = None):
         """This allows you to spend skillpoints.
 
-        `[p]skill attack/diplomacy`
+        `[p]skill attack/diplomacy/intelligence`
         `[p]skill reset` Will allow you to reset your skill points for a cost.
         """
         if not await self.allow_in_dm(ctx):
@@ -2439,12 +2478,18 @@ class Adventure(BaseCog):
         if slain or persuaded and not failed:
             CR = hp + dipl
             treasure = [0, 0, 0, 0]
-            if (
-                CR >= 80 or session.miniboss
-            ):  # rewards 50:50 rare:normal chest for killing something like the basilisk
+            if session.miniboss:  # rewards 50:50 rare:normal chest for killing something like the basilisk
                 treasure = random.choice([[0, 1, 0, 0], [1, 0, 0, 0]])
-            elif CR >= 180:  # rewards 50:50 epic:rare chest for killing hard stuff.
+            elif CR >= 600:  # super hard stuff
+                treasure = [0, 0, 1, 0]  # guaranteed epic
+            elif CR >= 320:  # rewards 50:50 rare:epic chest for killing hard stuff.
                 treasure = random.choice([[0, 0, 1, 0], [0, 1, 0, 0]])
+            elif CR >= 180:  # rewards 50:50 rare:normal chest for killing hardish stuff
+                treasure = random.choice([[1, 0, 0, 0], [0, 1, 0, 0]])
+            elif CR >= 80:  # small chance of a normal chest on killing stuff that's not terribly weak
+                roll = random.randint(1,5)
+                if roll == 1:
+                    treasure = [1, 0, 0, 0]
 
             if session.boss:  # always rewards at least an epic chest.
                 # roll for legendary chest
@@ -2514,7 +2559,7 @@ class Adventure(BaseCog):
                 group = fighters if len(fight_list) == 1 else wizards
                 text = f"{bold(group)} has slain the {session.challenge} in an epic battle!"
                 text += await self._reward(
-                    ctx, fight_list + magic_list + pray_list, amount, round((attack / hp) * 0.2), treasure
+                    ctx, fight_list + magic_list + pray_list, amount, round((attack if group == fighters else magic / hp) * 0.2), treasure
                 )
 
             if persuaded:
@@ -2591,7 +2636,7 @@ class Adventure(BaseCog):
                     ctx,
                     fight_list + magic_list + talk_list + pray_list,
                     amount,
-                    round(((attack / hp) + (diplomacy / dipl)) * 0.2),
+                    round((((attack+magic) / hp) + (diplomacy / dipl)) * 0.2),
                     treasure,
                 )
 
@@ -2631,7 +2676,7 @@ class Adventure(BaseCog):
                         group = fighters if len(fight_list) > 0 else wizards
                         text = f"{bold(group)} killed the {session.challenge} in an epic fight."
                 text += await self._reward(
-                    ctx, fight_list + magic_list + pray_list, amount, round((attack / hp) * 0.2), treasure
+                    ctx, fight_list + magic_list + pray_list, amount, round(((attack+magic) / hp) * 0.2), treasure
                 )
 
             if not slain and not persuaded:
@@ -2688,13 +2733,13 @@ class Adventure(BaseCog):
             msg = ""
             if len(session.fight) >= 1:
                 if pdef >= 1.5:
-                    msg+= f"Swords bounce of this monster as it's skin is **almost impenetrable!**\n"
+                    msg+= f"Swords bounce off this monster as it's skin is **almost impenetrable!**\n"
                 elif pdef >= 1.25:
                     msg+= f"This monster has **extremely tough** armour!\n"
                 elif pdef > 1:
-                    msg+= f"This monster has **thick** armour!\n"
+                    msg+= f"Swords don't cut this monster **quite as well!**!\n"
                 elif pdef >= 0.75 and pdef < 1:
-                    msg+= f"This monster's hide is **soft and easy** to slice!\n"
+                    msg+= f"This monster is **soft and easy** to slice!\n"
                 elif pdef > 0 and pdef != 1:
                     msg+= f"Swords slice through this monster like a **hot knife through butter!**\n"
             if len(session.magic) >= 1:
