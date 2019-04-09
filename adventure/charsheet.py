@@ -120,6 +120,22 @@ class Item:
             }
         }
 
+class AdventureGroup:
+    guild: discord.Guild
+    message_id: int
+    participants: Set[discord.Member] = set()
+    fight: List[discord.Member] = []
+    magic: List[discord.Member] = []
+    talk: List[discord.Member] = []
+    pray: List[discord.Member] = []
+
+    def __init__(self, **kwargs):
+        self.message_id: int = kwargs.pop("message_id")
+        self.participants: Set[discord.Member] = set()
+        self.fight: List[discord.Member] = []
+        self.magic: List[discord.Member] = []
+        self.talk: List[discord.Member] = []
+        self.pray: List[discord.Member] = []
 
 class GameSession:
     """A class to represent and hold current game sessions per server"""

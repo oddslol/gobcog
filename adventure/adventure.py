@@ -15,7 +15,7 @@ from redbot.core.utils.common_filters import filter_various_mentions
 from redbot.core.utils.predicates import MessagePredicate, ReactionPredicate
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS, start_adding_reactions
 
-from .charsheet import Character, Item, GameSession
+from .charsheet import Character, Item, GameSession, AdventureGroup
 
 
 BaseCog = getattr(commands, "Cog", object)
@@ -46,6 +46,8 @@ class Adventure(BaseCog):
             "ring",
             "charm",
         ]
+        self._group_actions = ["🗡", "🌟", "🗨", "🛐"]
+        self._group_controls = {"fight": "🗡", "magic": "🌟", "talk": "🗨", "pray": "🛐"}
         self._treasure_controls = {"✅": "equip", "❎": "backpack", "💰": "sell"}
 
         self._adventure_countdown = {}
@@ -53,6 +55,7 @@ class Adventure(BaseCog):
         self._trader_countdown = {}
         self._current_traders = {}
         self._sessions = {}
+        self._groups = {}
         self.tasks = []
 
         self.config = Config.get_conf(self, 2710801001, force_registration=True)
@@ -2159,9 +2162,25 @@ class Adventure(BaseCog):
         if challenge and not await ctx.bot.is_owner(ctx.author):
             # Only let the bot owner specify a specific challenge
             challenge = None
+
+        group_msg = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
+        try:
+            group = await self._group(ctx, group_msg, challenge)
+            for user in group.fight:
+                await ctx.send("This user wants to fight: " + user.display_name)
+            for user in group.magic:
+                await ctx.send("This user wants to pew pew: " + user.display_name)
+            for user in group.talk:
+                await ctx.send("This user wants to talk: " + user.display_name)
+            for user in group.pray:
+                await ctx.send("This user wants to pray: " + user.display_name)
+        except Exception:
+            log.error("Something went wrong forming the group", exc_info=True)
+            return
+
         adventure_msg = f"You feel adventurous, {self.E(ctx.author.display_name)}?"
         try:
-            reward, participants = await self._simple(ctx, adventure_msg, challenge)
+            reward, participants = await self._simple(ctx, adventure_msg, group, challenge)
         except Exception:
             log.error("Something went wrong controlling the game", exc_info=True)
             return
@@ -2189,8 +2208,37 @@ class Adventure(BaseCog):
                     c.heroclass["ability"] = False
                     await self.config.user(user).set(c._to_json())
         del self._sessions[ctx.guild.id]
+        del self._groups[ctx.guild.id]
 
-    async def _simple(self, ctx, adventure_msg, challenge=None):
+    async def _group(self, ctx, group_msg, challenge=None):
+        timeout = 30
+        timer = await self._adv_countdown(ctx, timeout, "Time remaining: ")
+        self.tasks.append(timer)
+        embed = discord.Embed(colour=discord.Colour.blurple())
+        use_embeds = (
+            await self.config.guild(ctx.guild).embed()
+            and ctx.channel.permissions_for(ctx.me).embed_links
+        )
+        normal_text = (
+            "Who among you are brave enough to help the cause?\n"
+            "Heroes have 30s to participate via reaction:"
+        )
+        embed.description = f"{group_msg}\n{normal_text}"
+        group_msg = await ctx.send(embed=embed)
+        self._groups[ctx.guild.id] = AdventureGroup(guild=ctx.guild, message_id=group_msg.id)
+
+        start_adding_reactions(group_msg, self._group_actions, ctx.bot.loop)
+        try:
+            await asyncio.wait_for(timer, timeout=timeout + 5)
+        except Exception:
+            timer.cancel()
+            log.error("Error with the countdown timer", exc_info=True)
+            pass
+        
+        group_msg.delete()
+        return self._groups[ctx.guild.id]
+
+    async def _simple(self, ctx, adventure_msg, group, challenge=None):
         text = ""
         if challenge and challenge.title() in list(self.MONSTERS.keys()):
             challenge = challenge.title()
@@ -2214,6 +2262,8 @@ class Adventure(BaseCog):
             timer=timer,
             monster=self.MONSTERS[challenge],
         )
+        session = self._sessions[ctx.guild.id]
+        session.fight, session.magic, session.pray, session.talk = group.fight, group.magic, group.pray, group.talk
         adventure_msg = (
             f"{adventure_msg}{text}\n{random.choice(self.LOCATIONS)}\n"
             f"**{self.E(ctx.author.display_name)}**{random.choice(self.RAISINS)}"
@@ -2313,6 +2363,28 @@ class Adventure(BaseCog):
             if reaction.message.id == self._current_traders[guild.id]["msg"]:
                 log.debug("handling cart")
                 await self._handle_cart(reaction, user)
+        if guild.id in self._groups:
+            if reaction.message.id == self._groups[guild.id].message_id:
+                await self._handle_group(reaction, user)
+
+    async def _handle_group(self, reaction, user):
+        action = {v: k for k, v in self._group_controls.items()}[str(reaction.emoji)]
+        log.debug(action)
+        group = self._groups[user.guild.id]
+        for x in ["fight", "magic", "talk", "pray"]:
+            if x == action:
+                continue
+            if user in getattr(group, x):
+                symbol = self._group_controls[x]
+                getattr(group, x).remove(user)
+                try:
+                    symbol = self._group_controls[x]
+                    await reaction.message.remove_reaction(symbol, user)
+                except Exception:
+                    # print(e)
+                    pass
+        if user not in getattr(group, action):
+            getattr(group, action).append(user)
 
     async def _handle_adventure(self, reaction, user):
         action = {v: k for k, v in self._adventure_controls.items()}[str(reaction.emoji)]
@@ -2773,10 +2845,11 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
-                    attack += int((roll - bonus + att_value) / pdef)
+                    hero_dmg = int((roll - bonus + att_value) / pdef)
+                    attack += hero_dmg
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{attack} dmg | "
+                        f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
                     )
             elif crit_roll == 20 or (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]):
                 ability = ""
@@ -2788,16 +2861,18 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
-                attack += int((roll + bonus + att_value) / pdef)
+                hero_dmg = int((roll + bonus + att_value) / pdef)
+                attack += hero_dmg
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{attack} dmg | "
+                    f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
                 )
             else:
-                attack += int((roll + att_value) / pdef)
+                hero_dmg = int((roll + att_value) / pdef) 
+                attack += hero_dmg
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did 🗡{attack} dmg | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
                 )
         for user in session.magic:
             roll = random.randint(1, 20)
@@ -2815,10 +2890,11 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                    magic += int((roll - bonus + int_value) / mdef)
+                    hero_dmg = int((roll - bonus + int_value) / mdef)
+                    magic += hero_dmg
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{magic} dmg | "
+                        f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
                     )
             elif crit_roll == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
                 ability = ""
@@ -2830,16 +2906,18 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                magic += int((roll + bonus + int_value) / mdef)
+                hero_dmg = int((roll + bonus + int_value) / mdef)
+                magic += hero_dmg
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{magic} dmg | "
+                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
                 )
             else:
-                magic += int((roll + int_value) / mdef)
+                hero_dmg = int((roll + int_value) / mdef)
+                magic += hero_dmg
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did 🌟{magic} dmg | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
                 )
         msg = msg + report + "\n"
         for user in fumblelist:
