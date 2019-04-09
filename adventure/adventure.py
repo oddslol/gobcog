@@ -240,6 +240,9 @@ class Adventure(BaseCog):
                             ),
                             lang="css",
                         )
+                    c = await c._equip_item(item, True)
+                    # log.info(c)
+                    await self.config.user(ctx.author).set(c._to_json())
                     current_stats = box(
                         (
                             f"{self.E(ctx.author.display_name)}'s new stats: "
@@ -250,9 +253,6 @@ class Adventure(BaseCog):
                         lang="css",
                     )
                     await ctx.send(equip_msg + current_stats)
-                    c = await c._equip_item(item, True)
-                    # log.info(c)
-                    await self.config.user(ctx.author).set(c._to_json())
 
     @_backpack.command(name="equip")
     async def backpack_equip(self, ctx, *, equip_item: str):
@@ -2163,20 +2163,24 @@ class Adventure(BaseCog):
             # Only let the bot owner specify a specific challenge
             challenge = None
 
-        group_msg = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
-        try:
-            group = await self._group(ctx, group_msg, challenge)
-            for user in group.fight:
-                await ctx.send("This user wants to fight: " + user.display_name)
-            for user in group.magic:
-                await ctx.send("This user wants to pew pew: " + user.display_name)
-            for user in group.talk:
-                await ctx.send("This user wants to talk: " + user.display_name)
-            for user in group.pray:
-                await ctx.send("This user wants to pray: " + user.display_name)
-        except Exception:
-            log.error("Something went wrong forming the group", exc_info=True)
-            return
+        if not challenge:
+            group_msg = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
+            try:
+                group = await self._group(ctx, group_msg, challenge)
+                total_att = 0
+                total_int = 0
+                total_cha = 0
+                for user_list in group.fight, group.magic, group.talk, group.pray:
+                    for user in user_list:
+                        c = await Character._from_json(self.config, user)
+                        total_att += c.att + c.skill['att'] + 5  # add low roll
+                        total_int += c.int + c.skill['int'] + 5 
+                        total_cha += c.cha + c.skill['cha'] + 5
+                log.debug("passing through total_att: " + str(total_att) + ", total_int: " + str(total_int) + ", total_cha: " + str(total_cha))
+                challenge = await self._find_challenge(total_att, total_int, total_cha)
+            except Exception:
+                log.error("Something went wrong forming the group", exc_info=True)
+                return
 
         adventure_msg = f"You feel adventurous, {self.E(ctx.author.display_name)}?"
         try:
@@ -2210,6 +2214,24 @@ class Adventure(BaseCog):
         del self._sessions[ctx.guild.id]
         del self._groups[ctx.guild.id]
 
+    async def _find_challenge(self, att, magic, dipl):
+        challenges = list(self.MONSTERS.keys())
+        challenge = random.choice(challenges)
+        fail_safe = 0  # 113 monsters at the moment, in case group is too strong it'll just be a random monster chosen
+        if max(att, magic, dipl) == att or magic:
+            while self.MONSTERS[challenge]["hp"] < (0.8 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > (1.2 * max(att, magic)):
+                challenge = random.choice(challenges)
+                if fail_safe > 113:
+                    break
+                fail_safe += 1
+        else:
+            while self.MONSTERS[challenge]["dipl"] < (0.8 * dipl) or self.MONSTERS[challenge]["dipl"] > (1.2 * dipl):
+                challenge = random.choice(challenges)
+                if fail_safe > 113:
+                    break
+                fail_safe += 1
+        return challenge
+
     async def _group(self, ctx, group_msg, challenge=None):
         timeout = 30
         timer = await self._adv_countdown(ctx, timeout, "Time remaining: ")
@@ -2235,7 +2257,7 @@ class Adventure(BaseCog):
             log.error("Error with the countdown timer", exc_info=True)
             pass
         
-        group_msg.delete()
+        await group_msg.delete()  # I think we should delete message or people can change reactions to it during encounter
         return self._groups[ctx.guild.id]
 
     async def _simple(self, ctx, adventure_msg, group, challenge=None):
@@ -2247,7 +2269,7 @@ class Adventure(BaseCog):
         attribute = random.choice(list(self.ATTRIBS.keys()))
 
         if self.MONSTERS[challenge]["boss"]:
-            timer = 120
+            timer = 90
             text = box(f"\n [{challenge} Alarm!]", lang="css")
         elif self.MONSTERS[challenge]["miniboss"]:
             timer = 60
