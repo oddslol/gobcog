@@ -2559,7 +2559,7 @@ class Adventure(BaseCog):
                 group = fighters if len(fight_list) == 1 else wizards
                 text = f"{bold(group)} has slain the {session.challenge} in an epic battle!"
                 text += await self._reward(
-                    ctx, fight_list + magic_list + pray_list, amount, round((attack if group == fighters else magic / hp) * 0.2), treasure
+                    ctx, fight_list + magic_list + pray_list, amount, round(((attack if group == fighters else magic) / hp) * 0.2), treasure
                 )
 
             if persuaded:
@@ -2755,7 +2755,7 @@ class Adventure(BaseCog):
                     msg+= f"Magic spells are **hugely effective** against this monster!\n"
             report = "Attack Party: "
         else:
-            return (fumblelist, critlist, attack, "")
+            return (fumblelist, critlist, attack, magic, "")
 
         for user in session.fight:
             roll = random.randint(1, 20)
