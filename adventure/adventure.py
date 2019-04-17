@@ -2153,9 +2153,12 @@ class Adventure(BaseCog):
     @commands.guild_only()
     @commands.cooldown(rate=1, per=125, type=commands.BucketType.guild)
     async def _adventure(self, ctx, *, challenge=None):
-        """This will send you on an adventure!
-
-        You play by reacting with the offered emojis.
+        """This will ask which players want to go together on an adventure!
+        
+        You play by reacting with the offered emojis. 
+        Your initial choice will be remembered. The difficulty of the adventure 
+        will be determined by the players in your group. Remember your initial choice
+        can be changed and should be tailored to the encounter!
         """
         if ctx.guild.id in self._sessions:
             return await ctx.send("There's already another adventure going on in this server.")
@@ -2182,7 +2185,7 @@ class Adventure(BaseCog):
                 log.error("Something went wrong forming the group", exc_info=True)
                 return
 
-        adventure_msg = f"You feel adventurous, {self.E(ctx.author.display_name)}?"
+        adventure_msg = ""
         try:
             reward, participants = await self._simple(ctx, adventure_msg, group, challenge)
         except Exception:
@@ -2245,11 +2248,26 @@ class Adventure(BaseCog):
             "Who among you are brave enough to help the cause?\n"
             "Heroes have 30s to participate via reaction:"
         )
-        embed.description = f"{group_msg}\n{normal_text}"
-        group_msg = await ctx.send(embed=embed)
+        if use_embeds:
+            embed.description = f"{group_msg}\n{normal_text}"
+            group_msg = await ctx.send(embed=embed)
+        else:
+            group_msg = await ctx.send( f"{group_msg}\n{normal_text}")
+
         self._groups[ctx.guild.id] = AdventureGroup(guild=ctx.guild, message_id=group_msg.id)
 
         start_adding_reactions(group_msg, self._group_actions, ctx.bot.loop)
+        group = self._groups[ctx.guild.id]
+        # You chose to start an adventure, you're going to fight! We'll pick what you're best at because we're nice.
+        # obviously can be changed via reactions
+        c = await Character._from_json(self.config, ctx.author)
+        max_stat = max(c.att + c.skill["att"], c.int + c.skill["int"], c.cha + c.skill["cha"])
+        if max_stat == c.att + c.skill["att"]:
+            group.fight.append(ctx.author)
+        elif max_stat == c.int + c.skill["int"]:
+            group.magic.append(ctx.author)
+        else:
+            group.talk.append(ctx.author)
         try:
             await asyncio.wait_for(timer, timeout=timeout + 5)
         except Exception:
@@ -2258,6 +2276,19 @@ class Adventure(BaseCog):
             pass
         
         await group_msg.delete()  # I think we should delete message or people can change reactions to it during encounter
+        adventurers = len(group.fight) + len(group.talk) + len(group.pray) + len(group.magic)
+        embed = discord.Embed(colour=discord.Colour.blurple())
+        user_list = []
+        for user in set(group.fight + group.talk + group.pray + group.magic):
+            user_list.append(self.E(user.display_name))
+        adj = "is"
+        if adventurers > 1:
+            adj = "are"            
+        if use_embeds:
+            embed.description = f"{humanize_list(user_list)} {adj} going on an adventure."
+            group_msg = await ctx.send(embed=embed)
+        else:
+            group_msg = await ctx.send(f"{humanize_list(user_list)} {adj} going on an adventure.")
         return self._groups[ctx.guild.id]
 
     async def _simple(self, ctx, adventure_msg, group, challenge=None):
@@ -2301,18 +2332,19 @@ class Adventure(BaseCog):
         dragon_text = (
             f"but **a{session.attribute} {session.challenge}** "
             "just landed in front of you glaring! \n\n"
-            "What will you do and will other heroes be brave enough to help you?\n"
-            "Heroes have 2 minutes to participate via reaction:"
+            "Is your group strong enough to handle this challenge?!\n"
+            "What will you do and will any other heroes help your cause?\n"
+            "Heroes have 90s to participate via reaction:"
         )
         basilisk_text = (
             f"but **a{session.attribute} {session.challenge}** stepped out looking around. \n\n"
-            "What will you do and will other heroes help your cause?\n"
-            "Heroes have 1 minute to participate via reaction:"
+            "What will you do and will any other heroes help your cause?\n"
+            "Heroes have 60s to participate via reaction:"
         )
         normal_text = (
             f"but **a{session.attribute} {session.challenge}** "
             f"is guarding it with{random.choice(self.THREATEE)}. \n\n"
-            "What will you do and will other heroes help your cause?\n"
+            "What will you do and will any other heroes help your cause?\n"
             "Heroes have 30s to participate via reaction:"
         )
 
@@ -2596,8 +2628,19 @@ class Adventure(BaseCog):
                 treasure[0] += 1
             if treasure == [0, 0, 0, 0]:
                 treasure = False
+
+        failed_run_list = []
+        for user in run_list:
+            flee = random.randint(1,5)
+            if flee == 1:
+                failed_run_list.append(user)
         if session.miniboss and failed:
-            session.participants = set(fight_list + talk_list + pray_list + magic_list + run_list + fumblelist)
+            session.participants = set(fight_list + talk_list + pray_list + magic_list + failed_run_list + fumblelist)
+            run_msg_list = []
+            for user in failed_run_list:
+                run_msg_list.append(f"{bold(self.E(user.display_name))}")
+            if len(failed_run_list) >= 1:
+                result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
             currency_name = await bank.get_currency_name(ctx.guild)
             repair_list = []
             for user in session.participants:
@@ -2621,7 +2664,12 @@ class Adventure(BaseCog):
                 )
             return await ctx.send(result_msg)
         if session.miniboss and not slain and not persuaded:
-            session.participants = set(fight_list + talk_list + pray_list + magic_list + run_list + fumblelist)
+            session.participants = set(fight_list + talk_list + pray_list + magic_list + failed_run_list + fumblelist)
+            run_msg_list = []
+            for user in failed_run_list:
+                run_msg_list.append(f"{bold(self.E(user.display_name))}")
+            if len(failed_run_list) >= 1:
+                result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
             repair_list = []
             currency_name = await bank.get_currency_name(ctx.guild)
             for user in session.participants:
@@ -2647,7 +2695,7 @@ class Adventure(BaseCog):
                 f"\n{humanize_list(loss_list)} to repay a passing "
                 "cleric that resurrected the group."
             )
-        amount = (hp + dipl) * people
+        amount = hp + dipl
         if people == 1:
             if slain:
                 group = fighters if len(fight_list) == 1 else wizards
@@ -2668,7 +2716,12 @@ class Adventure(BaseCog):
             if not slain and not persuaded:
                 currency_name = await bank.get_currency_name(ctx.guild)
                 repair_list = []
-                users = fight_list + magic_list + talk_list + pray_list + run_list + fumblelist
+                users = fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist
+                run_msg_list = []
+                for user in failed_run_list:
+                    run_msg_list.append(f"{bold(self.E(user.display_name))}")
+                if len(failed_run_list) >= 1:
+                    result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
                 for user in users:
                     bal = await bank.get_balance(user)
                     loss = round(bal * 0.05)
@@ -2776,7 +2829,12 @@ class Adventure(BaseCog):
             if not slain and not persuaded:
                 currency_name = await bank.get_currency_name(ctx.guild)
                 repair_list = []
-                users = fight_list + magic_list + talk_list + pray_list + run_list + fumblelist
+                users = fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist
+                run_msg_list = []
+                for user in failed_run_list:
+                    run_msg_list.append(f"{bold(self.E(user.display_name))}")
+                if len(failed_run_list) >= 1:
+                    result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
                 for user in users:
                     bal = await bank.get_balance(user)
                     loss = round(bal * 0.05)
@@ -2803,7 +2861,7 @@ class Adventure(BaseCog):
 
         await ctx.send(result_msg + "\n" + text)
         await self._data_check(ctx)
-        session.participants = set(fight_list + magic_list + talk_list + pray_list + run_list + fumblelist)
+        session.participants = set(fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist)
 
     async def handle_run(self, guild_id, attack, diplomacy, magic):
         runners = []
@@ -2831,7 +2889,7 @@ class Adventure(BaseCog):
                 elif pdef >= 1.25:
                     msg+= f"This monster has **extremely tough** armour!\n"
                 elif pdef > 1:
-                    msg+= f"Swords don't cut this monster **quite as well!**!\n"
+                    msg+= f"This monster has **thick skin!**\n"
                 elif pdef >= 0.75 and pdef < 1:
                     msg+= f"This monster is **soft and easy** to slice!\n"
                 elif pdef > 0 and pdef != 1:
@@ -2881,7 +2939,7 @@ class Adventure(BaseCog):
                 if c.heroclass["ability"]:
                     ability = "🗯️"
                 bonus_roll = random.randint(5, 15)
-                bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
+                bonus_multi = 0.5 if (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
                 hero_dmg = int((roll + bonus + att_value) / pdef)
                 attack += hero_dmg
@@ -2926,7 +2984,7 @@ class Adventure(BaseCog):
                 if c.heroclass["ability"]:
                     ability = "⚡️"
                 bonus_roll = random.randint(5, 15)
-                bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
+                bonus_multi = 0.5 if (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
                 hero_dmg = int((roll + bonus + int_value) / mdef)
                 magic += hero_dmg
@@ -3114,6 +3172,12 @@ class Adventure(BaseCog):
             failed = False
         return failed
 
+    async def _total_xp_required(self, level):
+        total_xp = 0
+        for lvl in range(1, level + 1):
+            total_xp += 10 * (lvl ** 2) + ((lvl-1) * 100) + 100
+        return total_xp
+
     async def _add_rewards(self, ctx, user, exp, cp, special):
         try:
             c = await Character._from_json(self.config, user)
@@ -3124,13 +3188,17 @@ class Adventure(BaseCog):
         member = ctx.guild.get_member(user.id)
         await bank.deposit_credits(member, cp)
         lvl_start = c.lvl
-        lvl_end = int(c.exp ** (1 / 4))
+        lvl_end = lvl_start
+        xp_needed = await self._total_xp_required(lvl_end)
+        while c.exp >= xp_needed:
+            lvl_end += 1
+            xp_needed = await self._total_xp_required(lvl_end)
 
         if lvl_start < lvl_end:
             # recalculate free skillpoint pool based on new level and already spent points.
             await ctx.send(f"{user.mention} is now level {lvl_end}!")
             c.lvl = lvl_end
-            c.skill["pool"] = int(lvl_end / 5) - (c.skill["att"] + c.skill["cha"])
+            c.skill["pool"] = int(lvl_end / 3) - (c.skill["att"] + c.skill["cha"] + c.skill["int"])
             if c.skill["pool"] > 0:
                 await ctx.send(f"{self.E(user.display_name)}, you have skillpoints available.")
         if special is not False:

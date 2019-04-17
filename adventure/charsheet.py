@@ -224,7 +224,9 @@ class Character(Item):
         """
             Define str to be our default look for the character sheet :thinkies:
         """
-        next_lvl = int((self.lvl + 1) ** 4)
+        total_xp = 0
+        for lvl in range(1, self.lvl + 1):
+            total_xp += 10 * (lvl ** 2) + ((lvl-1) * 100) + 100
         if self.heroclass != {} and "name" in self.heroclass:
             class_desc = self.heroclass["name"] + "\n\n" + self.heroclass["desc"]
             if self.heroclass["name"] == "Ranger":
@@ -242,7 +244,7 @@ class Character(Item):
             f"INTELLIGENCE: {self.int} [+{self.skill['int']}] - "
             f"DIPLOMACY: {self.cha} [+{self.skill['cha']}] -\n\n- "
             f"Currency: {self.bal} \n- "
-            f"Experience: {round(self.exp)}/{next_lvl} \n- "
+            f"Experience: {round(self.exp)}/{total_xp} \n- "
             f"Unspent skillpoints: {self.skill['pool']}\n\n"
             f"Items Equipped:{self.__equipment__()}"
         )
