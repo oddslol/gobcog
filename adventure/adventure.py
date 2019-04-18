@@ -2166,6 +2166,7 @@ class Adventure(BaseCog):
             # Only let the bot owner specify a specific challenge
             challenge = None
 
+        group = None
         if not challenge:
             group_msg = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
             try:
@@ -2215,7 +2216,8 @@ class Adventure(BaseCog):
                     c.heroclass["ability"] = False
                     await self.config.user(user).set(c._to_json())
         del self._sessions[ctx.guild.id]
-        del self._groups[ctx.guild.id]
+        if group:
+            del self._groups[ctx.guild.id]
 
     async def _find_challenge(self, att, magic, dipl):
         challenges = list(self.MONSTERS.keys())
@@ -2316,7 +2318,8 @@ class Adventure(BaseCog):
             monster=self.MONSTERS[challenge],
         )
         session = self._sessions[ctx.guild.id]
-        session.fight, session.magic, session.pray, session.talk = group.fight, group.magic, group.pray, group.talk
+        if group:
+            session.fight, session.magic, session.pray, session.talk = group.fight, group.magic, group.pray, group.talk
         adventure_msg = (
             f"{adventure_msg}{text}\n{random.choice(self.LOCATIONS)}\n"
             f"**{self.E(ctx.author.display_name)}**{random.choice(self.RAISINS)}"
