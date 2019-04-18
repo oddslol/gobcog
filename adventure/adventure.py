@@ -2630,6 +2630,7 @@ class Adventure(BaseCog):
                 treasure = False
 
         failed_run_list = []
+        repair_list = []
         for user in run_list:
             flee = random.randint(1,5)
             if flee == 1:
@@ -2641,28 +2642,10 @@ class Adventure(BaseCog):
                 run_msg_list.append(f"{bold(self.E(user.display_name))}")
             if len(failed_run_list) >= 1:
                 result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
-            currency_name = await bank.get_currency_name(ctx.guild)
-            repair_list = []
-            for user in session.participants:
-                bal = await bank.get_balance(user)
-                loss = round(bal * 0.05)
-                if bal > 500:
-                    repair_list.append([user, loss])
-                    await bank.withdraw_credits(user, loss)
-                else:
-                    pass
-            loss_list = []
+            
             result_msg += session.miniboss["defeat"]
-            if len(repair_list) > 0:
-                for user, loss in repair_list:
-                    loss_list.append(
-                        f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}"
-                    )
-                result_msg += (
-                    f"\n{humanize_list(loss_list)} to repay a "
-                    "passing cleric that unfroze the group."
-                )
-            return await ctx.send(result_msg)
+            await ctx.send(result_msg)
+            return await self.repair_users(ctx, session.participants, " to repay a passing cleric that unfroze the group.\n", " to be unfrozen...\n")
         if session.miniboss and not slain and not persuaded:
             session.participants = set(fight_list + talk_list + pray_list + magic_list + failed_run_list + fumblelist)
             run_msg_list = []
@@ -2670,31 +2653,15 @@ class Adventure(BaseCog):
                 run_msg_list.append(f"{bold(self.E(user.display_name))}")
             if len(failed_run_list) >= 1:
                 result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
-            repair_list = []
-            currency_name = await bank.get_currency_name(ctx.guild)
-            for user in session.participants:
-                bal = await bank.get_balance(user)
-                loss = round(bal * 0.05)
-                if bal > 500:
-                    repair_list.append([user, loss])
-                    await bank.withdraw_credits(user, loss)
-                else:
-                    pass
-            loss_list = []
-            if len(repair_list) > 0:
-                for user, loss in repair_list:
-                    loss_list.append(
-                        f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}"
-                    )
+            
             miniboss = session.challenge
             item = session.miniboss["requirements"][0]
             special = session.miniboss["special"]
             result_msg += (
                 f"The {item} countered the {miniboss}'s "
                 f"{special}, but he still managed to kill you."
-                f"\n{humanize_list(loss_list)} to repay a passing "
-                "cleric that resurrected the group."
             )
+            repair_list.append([session.participants, " to repay a passing cleric that resurrected the group.\n", " to be resurrected...\n"])
         amount = hp + dipl
         if people == 1:
             if slain:
@@ -2714,36 +2681,17 @@ class Adventure(BaseCog):
                 )
 
             if not slain and not persuaded:
-                currency_name = await bank.get_currency_name(ctx.guild)
-                repair_list = []
                 users = fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist
                 run_msg_list = []
                 for user in failed_run_list:
                     run_msg_list.append(f"{bold(self.E(user.display_name))}")
                 if len(failed_run_list) >= 1:
                     result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
-                for user in users:
-                    bal = await bank.get_balance(user)
-                    loss = round(bal * 0.05)
-                    if bal > 500:
-                        repair_list.append([user, loss])
-                        await bank.withdraw_credits(user, loss)
-                    else:
-                        pass
-                loss_list = []
-                if len(repair_list) > 0:
-                    for user, loss in repair_list:
-                        loss_list.append(
-                            f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}"
-                        )
-                repair_text = (
-                    "" if not loss_list else f"{humanize_list(loss_list)} to repair their gear."
-                )
+                repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
                 options = [
-                    f"No amount of diplomacy or valiant fighting could save you.\n{repair_text}",
-                    f"This challenge was too much for one hero.\n{repair_text}",
-                    "You tried your best, but the group couldn't succeed at their attempt.\n"
-                    f"{repair_text}",
+                    f"No amount of diplomacy or valiant fighting could save you.\n",
+                    f"This challenge was too much for one hero.\n",
+                    f"You tried your best, but the group couldn't succeed at their attempt.\n"
                 ]
                 text = random.choice(options)
         else:
@@ -2827,41 +2775,87 @@ class Adventure(BaseCog):
                 )
 
             if not slain and not persuaded:
-                currency_name = await bank.get_currency_name(ctx.guild)
-                repair_list = []
                 users = fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist
                 run_msg_list = []
                 for user in failed_run_list:
                     run_msg_list.append(f"{bold(self.E(user.display_name))}")
                 if len(failed_run_list) >= 1:
                     result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
-                for user in users:
-                    bal = await bank.get_balance(user)
-                    loss = round(bal * 0.05)
-                    if bal > 500:
-                        repair_list.append([user, loss])
-                        await bank.withdraw_credits(user, loss)
-                    else:
-                        pass
-                loss_list = []
-                if len(repair_list) > 0:
-                    for user, loss in repair_list:
-                        loss_list.append(
-                            f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}"
-                        )
-                repair_text = (
-                    "" if not loss_list else f"{humanize_list(loss_list)} to repair their gear."
-                )
+                repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
                 options = [
-                    f"No amount of diplomacy or valiant fighting could save you.\n{repair_text}",
-                    f"This challenge was too much for the group.\n{repair_text}",
-                    f"You tried your best, but couldn't succeed.\n{repair_text}",
+                    f"No amount of diplomacy or valiant fighting could save you.\n",
+                    f"This challenge was too much for the group.\n",
+                    f"You tried your best, but couldn't succeed.\n"
                 ]
                 text = random.choice(options)
 
         await ctx.send(result_msg + "\n" + text)
+        # Failing basilisk with the correct item would lead to 2 lists and allows for more in future
+        for repairs in repair_list:
+            await self.repair_users(ctx, repairs[0], repairs[1], repairs[2])
         await self._data_check(ctx)
         session.participants = set(fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist)
+
+    async def repair_users(self, ctx, users, repair_msg = " to repair their gear.\n", fail_repair_msg = " to have their gear repaired...\n"):
+        currency_name = await bank.get_currency_name(ctx.author.guild)
+        repaired = []
+        broke = []
+        loss_list = []
+        if str(currency_name).startswith("<"):
+            currency_name = "credits"
+        
+        for user in users:
+            c = await Character._from_json(self.config, user)
+            repair_cost = 0 
+            for current_item in c.current_equipment():
+                if "rare" in current_item.rarity:
+                    repair_cost += 50
+                elif "epic" in current_item.rarity:
+                    repair_cost += 250
+                elif "legendary" in current_item.rarity:
+                    repair_cost += 1250
+                elif "forged" in current_item.rarity:  # specialised equipment, hard to repair!
+                    repair_cost += 2500
+            try:
+                await bank.withdraw_credits(user, repair_cost)
+                repaired.append([user, repair_cost])
+            except ValueError:
+                broke.append([user, repair_cost])
+        
+        if len(repaired) > 0:
+            for user, loss in repaired:
+                loss_list.append(f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}")
+            repair_text = ("" if not loss_list else f"{humanize_list(loss_list)} {repair_msg}")
+            await ctx.send(repair_text)
+        
+        for user, loss in broke:
+            broke_msg = (f"{bold(self.E(user.display_name))} couldn't afford {str(loss)} {currency_name} {fail_repair_msg}"
+                                f"Don't worry, I'll take items from your backpack to make up for it!\n")
+            msg = await ctx.send(broke_msg)
+            bal = await bank.get_balance(user)
+            while bal <= loss:
+                if len(c.backpack.items()) == 0:
+                    empty_msg = f"Looks like you have nothing left {self.E(user.display_name)}... pity.\n"
+                    await ctx.send(empty_msg)
+                    break
+                name, item = random.choice(list(c.backpack.items()))
+                item.owned -= 1
+                price = await self._sell(user, item)
+                sold_msg = (
+                    f"{self.E(user.display_name)} sold their "
+                    f"{item} for {price} {currency_name}.\n"
+                )
+                await ctx.send(sold_msg)
+                if item.owned <= 0:
+                    del c.backpack[item.name]
+                bal = await bank.get_balance(user)
+            try:
+                await bank.withdraw_credits(user, loss)
+                even_msg = (f"Your debt is paid {self.E(user.display_name)}.\n")
+                await ctx.send(even_msg)
+            except ValueError:
+                pass
+            await self.config.user(user).set(c._to_json())
 
     async def handle_run(self, guild_id, attack, diplomacy, magic):
         runners = []
