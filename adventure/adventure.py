@@ -1179,7 +1179,8 @@ class Adventure(BaseCog):
         `[p]give funds 10 @Elder Aramis`
         will create 10 currency and add to Elder Aramis' total.
         """
-
+        if await bank.is_global() and not await ctx.bot.is_owner(ctx.author):
+            return await ctx.send("You are not worthy.")
         if to is None:
             return await ctx.send(
                 f"You need to specify a receiving member, {self.E(ctx.author.display_name)}."
@@ -1885,6 +1886,13 @@ class Adventure(BaseCog):
                     lang="css",
                 )
             )
+        if not c.heroclass["pet"]:
+            return await ctx.send(
+                box(
+                    f"{self.E(ctx.author.display_name)}, you need to have a pet to do this.",
+                    lang="css",
+                )
+            )
         if "forage" not in c.heroclass:
             c.heroclass["forage"] = 7201
         if c.heroclass["forage"] <= time.time() - 7200:
@@ -2235,7 +2243,11 @@ class Adventure(BaseCog):
         challenges = list(self.MONSTERS.keys())
         challenge = random.choice(challenges)
         fail_safe = 0  # 113 monsters at the moment, in case group is too strong it'll just be a random monster chosen
-        if max(att, magic, dipl) == att or magic:
+        boss_roll = random.randint(1, 20)
+        if boss_roll == 20:
+             while not self.MONSTERS[challenge]["boss"]:
+                challenge = random.choice(challenges)
+        elif max(att, magic, dipl) == att or magic:
             while self.MONSTERS[challenge]["hp"] < (0.4 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > (0.8 * max(att, magic)):
                 challenge = random.choice(challenges)
                 if fail_safe > 113:
