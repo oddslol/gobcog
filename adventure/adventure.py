@@ -2241,24 +2241,22 @@ class Adventure(BaseCog):
 
     async def _find_challenge(self, att, magic, dipl):
         challenges = list(self.MONSTERS.keys())
-        challenge = random.choice(challenges)
-        fail_safe = 0  # 113 monsters at the moment, in case group is too strong it'll just be a random monster chosen
+        random.shuffle(challenges)  # if we take the list and shuffle it... we can iterate through it rather than rely on random.choice
+        i = 0
+        challenge = challenges[i]
         boss_roll = random.randint(1, 20)
         if boss_roll == 20:
-             while not self.MONSTERS[challenge]["boss"]:
-                challenge = random.choice(challenges)
+             while not self.MONSTERS[challenge]["boss"] and i < len(challenges):
+                i += 1
+                challenge = challenges[i]
         elif max(att, magic, dipl) == att or magic:
-            while self.MONSTERS[challenge]["hp"] < (0.4 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > (0.8 * max(att, magic)):
-                challenge = random.choice(challenges)
-                if fail_safe > 113:
-                    break
-                fail_safe += 1
+            while self.MONSTERS[challenge]["hp"] < (0.4 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > (0.8 * max(att, magic)) and i < len(challenges):
+                i += 1
+                challenge = challenges[i]
         else:
-            while self.MONSTERS[challenge]["dipl"] < (0.4 * dipl) or self.MONSTERS[challenge]["dipl"] > (0.8 * dipl):
-                challenge = random.choice(challenges)
-                if fail_safe > 113:
-                    break
-                fail_safe += 1
+            while self.MONSTERS[challenge]["dipl"] < (0.4 * dipl) or self.MONSTERS[challenge]["dipl"] > (0.8 * dipl) and i < len(challenges):
+                i += 1
+                challenge = challenges[i]
         return challenge
 
     async def _group(self, ctx, group_msg, challenge=None):
@@ -2919,8 +2917,9 @@ class Adventure(BaseCog):
                     msg+= f"This monster is **soft and easy** to slice!"
                 elif pdef > 0 and pdef != 1:
                     msg+= f"Swords slice through this monster like a **hot knife through butter!**"
-                mult = 1/pdef
-                msg+= f" *[🗡 x{mult:0.2f}]*\n"
+                if pdef != 1:
+                    mult = 1/pdef
+                    msg+= f" *[🗡 x{mult:0.2f}]*\n"
             if len(session.magic) >= 1:
                 if mdef >= 1.5:
                     msg+= f"Magic? Pfft, your puny magic is **no match** for this creature!"
@@ -2932,8 +2931,9 @@ class Adventure(BaseCog):
                     msg+= f"This monster's hide **melts to magic!**"
                 elif mdef > 0 and mdef != 1:
                     msg+= f"Magic spells are **hugely effective** against this monster!"
-                mult = 1/mdef
-                msg+= f" *[🌟 x{mult:0.2f}]*\n"
+                if mdef != 1:
+                    mult = 1/mdef
+                    msg+= f" *[🌟 x{mult:0.2f}]*\n"
             report = "Attack Party: "
         else:
             return (fumblelist, critlist, attack, magic, "")
