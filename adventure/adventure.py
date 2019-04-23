@@ -2236,13 +2236,13 @@ class Adventure(BaseCog):
         challenge = random.choice(challenges)
         fail_safe = 0  # 113 monsters at the moment, in case group is too strong it'll just be a random monster chosen
         if max(att, magic, dipl) == att or magic:
-            while self.MONSTERS[challenge]["hp"] < (0.6 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > max(att, magic):
+            while self.MONSTERS[challenge]["hp"] < (0.4 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > (0.8 * max(att, magic)):
                 challenge = random.choice(challenges)
                 if fail_safe > 113:
                     break
                 fail_safe += 1
         else:
-            while self.MONSTERS[challenge]["dipl"] < (0.6 * dipl) or self.MONSTERS[challenge]["dipl"] > dipl:
+            while self.MONSTERS[challenge]["dipl"] < (0.4 * dipl) or self.MONSTERS[challenge]["dipl"] > (0.8 * dipl):
                 challenge = random.choice(challenges)
                 if fail_safe > 113:
                     break
@@ -2923,6 +2923,11 @@ class Adventure(BaseCog):
             return (fumblelist, critlist, attack, magic, "")
 
         for user in session.fight: #check if a tinkerer is in the fight party and calculate the possible bonus
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
             bonus_tinkerer = c.att + c.skill["att"]
             if c.heroclass["name"] == "Tinkerer" and not sharpen:
                 sharpen_chance = min(int(bonus_tinkerer / 2.5 + 1), 25)
@@ -2977,6 +2982,11 @@ class Adventure(BaseCog):
                     f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
                 )
         for user in session.magic: #check if a bard is in the magic party and calculate the possible bonus
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
             bonus_bard = int((c.int + c.skill["int"] + c.cha + c.skill["cha"]) / 2)
             if c.heroclass["name"] == "Bard" and not melody:
                 melody_chance = min(int(bonus_bard / 2.5 + 1), 25)
@@ -3004,7 +3014,7 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                    hero_dmg = int((roll - bonus + int_value) / (mdef - (bonus_melody / 100)))
+                    hero_dmg = int((roll - bonus + int_value) / (mdef - (melody_bonus / 100)))
                     magic += hero_dmg
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
@@ -3020,7 +3030,7 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = 0.5 if (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
-                hero_dmg = int((roll + bonus + int_value) / (mdef - (bonus_melody / 100)))
+                hero_dmg = int((roll + bonus + int_value) / (mdef - (melody_bonus / 100)))
                 magic += hero_dmg
                 bonus = ability + str(bonus)
                 report += (
@@ -3028,7 +3038,7 @@ class Adventure(BaseCog):
                     f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
                 )
             else:
-                hero_dmg = int((roll + int_value) / (mdef - (bonus_melody / 100)))
+                hero_dmg = int((roll + int_value) / (mdef - (melody_bonus / 100)))
                 magic += hero_dmg
                 report += (
                     f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
