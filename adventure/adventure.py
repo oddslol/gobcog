@@ -3202,7 +3202,7 @@ class Adventure(BaseCog):
 
             chest_msg2 = (
                 f"{self.E(user.display_name)} found a {item}. (Attack: "
-                f"{str(item.att)}, Intelligence: {str(item.int)} [{slot}], Charisma: {str(item.cha)})"
+                f"{str(item.att)}, Intelligence: {str(item.int)}, Charisma: {str(item.cha)}) [{slot}]"
             )
             await open_msg.edit(
                 content=box(
@@ -3216,7 +3216,7 @@ class Adventure(BaseCog):
         else:
             chest_msg2 = (
                 f"The {user} found a {item}. (Attack: "
-                f"{str(item.att)}, Intelligence: {str(item.int)} [{slot}], Charisma: {str(item.cha)})"
+                f"{str(item.att)}, Intelligence: {str(item.int)}, Charisma: {str(item.cha)}) [{slot}]"
             )
             await open_msg.edit(
                 content=box(
