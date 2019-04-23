@@ -2910,26 +2910,30 @@ class Adventure(BaseCog):
             msg = ""
             if len(session.fight) >= 1:
                 if pdef >= 1.5:
-                    msg+= f"Swords bounce off this monster as it's skin is **almost impenetrable!**\n"
+                    msg+= f"Swords bounce off this monster as it's skin is **almost impenetrable!**"
                 elif pdef >= 1.25:
-                    msg+= f"This monster has **extremely tough** armour!\n"
+                    msg+= f"This monster has **extremely tough** armour!"
                 elif pdef > 1:
-                    msg+= f"This monster has **thick skin!**\n"
+                    msg+= f"This monster has **thick skin!**"
                 elif pdef >= 0.75 and pdef < 1:
-                    msg+= f"This monster is **soft and easy** to slice!\n"
+                    msg+= f"This monster is **soft and easy** to slice!"
                 elif pdef > 0 and pdef != 1:
-                    msg+= f"Swords slice through this monster like a **hot knife through butter!**\n"
+                    msg+= f"Swords slice through this monster like a **hot knife through butter!**"
+                mult = 1/pdef
+                msg+= f" *[🗡 x{mult:0.2f}]*\n"
             if len(session.magic) >= 1:
                 if mdef >= 1.5:
-                    msg+= f"Magic? Pfft, your puny magic is **no match** for this creature!\n"
+                    msg+= f"Magic? Pfft, your puny magic is **no match** for this creature!"
                 elif mdef >= 1.25:
-                    msg+= f"This monster has **substantial magic resistance!**\n"
+                    msg+= f"This monster has **substantial magic resistance!**"
                 elif mdef > 1:
-                    msg+= f"This monster has increased **magic resistance!**\n"
+                    msg+= f"This monster has increased **magic resistance!**"
                 elif mdef >= 0.75 and mdef < 1:
-                    msg+= f"This monster's hide **melts to magic!**\n"
+                    msg+= f"This monster's hide **melts to magic!**"
                 elif mdef > 0 and mdef != 1:
-                    msg+= f"Magic spells are **hugely effective** against this monster!\n"
+                    msg+= f"Magic spells are **hugely effective** against this monster!"
+                mult = 1/mdef
+                msg+= f" *[🌟 x{mult:0.2f}]*\n"
             report = "Attack Party: "
         else:
             return (fumblelist, critlist, attack, magic, "")
