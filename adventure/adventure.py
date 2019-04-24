@@ -31,6 +31,7 @@ class Adventure(BaseCog):
         self._last_trade = {}
 
         self._adventure_actions = ["🗡", "🌟", "🗨", "🛐", "🏃"]
+        self._adventure_run = ["🏃"]
         self._adventure_controls = {"fight": "🗡", "magic": "🌟", "talk": "🗨", "pray": "🛐", "run": "🏃"}
         self._order = [
             "head",
@@ -2188,9 +2189,9 @@ class Adventure(BaseCog):
 
         group = None
         if not challenge:
-            group_msg = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
+            group_txt = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
             try:
-                group = await self._group(ctx, group_msg, challenge)
+                group, group_msg = await self._group(ctx, group_txt, challenge)
                 total_att = 0
                 total_int = 0
                 total_cha = 0
@@ -2206,9 +2207,9 @@ class Adventure(BaseCog):
                 log.error("Something went wrong forming the group", exc_info=True)
                 return
 
-        adventure_msg = ""
+        adventure_txt = ""
         try:
-            reward, participants = await self._simple(ctx, adventure_msg, group, challenge)
+            reward, participants = await self._simple(ctx, adventure_txt, group_msg, group, challenge)
         except Exception:
             log.error("Something went wrong controlling the game", exc_info=True)
             return
@@ -2260,6 +2261,9 @@ class Adventure(BaseCog):
         return challenge
 
     async def _group(self, ctx, group_msg, challenge=None):
+        embed = discord.Embed(colour=discord.Colour.blurple())
+        embed.description = f"{ctx.author.display_name} is going on an adventure."
+        adventure_msg = await ctx.send(embed=embed)
         timeout = 30
         timer = await self._adv_countdown(ctx, timeout, "Time remaining: ")
         self.tasks.append(timer)
@@ -2272,12 +2276,13 @@ class Adventure(BaseCog):
             "Who among you are brave enough to help the cause?\n"
             "Heroes have 30s to participate via reaction:"
         )
+        
         if use_embeds:
             embed.description = f"{group_msg}\n{normal_text}"
             group_msg = await ctx.send(embed=embed)
         else:
             group_msg = await ctx.send( f"{group_msg}\n{normal_text}")
-
+        
         self._groups[ctx.guild.id] = AdventureGroup(guild=ctx.guild, message_id=group_msg.id)
 
         start_adding_reactions(group_msg, self._group_actions, ctx.bot.loop)
@@ -2299,7 +2304,6 @@ class Adventure(BaseCog):
             log.error("Error with the countdown timer", exc_info=True)
             pass
         
-        await group_msg.delete()  # I think we should delete message or people can change reactions to it during encounter
         adventurers = len(group.fight) + len(group.talk) + len(group.pray) + len(group.magic)
         embed = discord.Embed(colour=discord.Colour.blurple())
         user_list = []
@@ -2310,12 +2314,13 @@ class Adventure(BaseCog):
             adj = "are"            
         if use_embeds:
             embed.description = f"{humanize_list(user_list)} {adj} going on an adventure."
-            group_msg = await ctx.send(embed=embed)
+            await adventure_msg.edit(embed=embed)
         else:
-            group_msg = await ctx.send(f"{humanize_list(user_list)} {adj} going on an adventure.")
-        return self._groups[ctx.guild.id]
+            await adventure_msg.edit(content=box(f"{humanize_list(user_list)} {adj} going on an adventure."))
 
-    async def _simple(self, ctx, adventure_msg, group, challenge=None):
+        return self._groups[ctx.guild.id], group_msg
+
+    async def _simple(self, ctx, adventure_txt, group_msg, group, challenge=None):
         text = ""
         if challenge and challenge.title() in list(self.MONSTERS.keys()):
             challenge = challenge.title()
@@ -2342,18 +2347,17 @@ class Adventure(BaseCog):
         session = self._sessions[ctx.guild.id]
         if group:
             session.fight, session.magic, session.pray, session.talk = group.fight, group.magic, group.pray, group.talk
-        adventure_msg = (
-            f"{adventure_msg}{text}\n{random.choice(self.LOCATIONS)}\n"
+        adventure_txt = (
+            f"{adventure_txt}{text}\n{random.choice(self.LOCATIONS)}\n"
             f"**{self.E(ctx.author.display_name)}**{random.choice(self.RAISINS)}"
         )
-        await self._choice(ctx, adventure_msg)
+        await self._choice(ctx, adventure_txt, group_msg)
         rewards = self._rewards
         participants = self._sessions[ctx.guild.id].participants
         return (rewards, participants)
 
-    async def _choice(self, ctx, adventure_msg):
+    async def _choice(self, ctx, adventure_txt, adventure_msg):
         session = self._sessions[ctx.guild.id]
-
         dragon_text = (
             f"but **a{session.attribute} {session.challenge}** "
             "just landed in front of you glaring! \n\n"
@@ -2382,36 +2386,36 @@ class Adventure(BaseCog):
         )
         if session.boss:
             if use_embeds:
-                embed.description = f"{adventure_msg}\n{dragon_text}"
+                embed.description = f"{adventure_txt}\n{dragon_text}"
                 embed.colour = discord.Colour.dark_red()
                 if session.monster["image"]:
                     embed.set_image(url=session.monster["image"])
-                adventure_msg = await ctx.send(embed=embed)
+                await adventure_msg.edit(embed=embed)
             else:
-                adventure_msg = await ctx.send(f"{adventure_msg}\n{dragon_text}")
+                await adventure_msg.edit(content=box(f"{adventure_txt}\n{dragon_text}"))
             timeout = 120
 
         elif session.miniboss:
             if use_embeds:
-                embed.description = f"{adventure_msg}\n{basilisk_text}"
+                embed.description = f"{adventure_txt}\n{basilisk_text}"
                 embed.colour = discord.Colour.dark_green()
                 if session.monster["image"]:
                     embed.set_image(url=session.monster["image"])
-                adventure_msg = await ctx.send(embed=embed)
+                await adventure_msg.edit(embed=embed)
             else:
-                adventure_msg = await ctx.send(f"{adventure_msg}\n{basilisk_text}")
+                await adventure_msg.edit(content=box(f"{adventure_txt}\n{basilisk_text}"))
             timeout = 60
         else:
             if use_embeds:
-                embed.description = f"{adventure_msg}\n{normal_text}"
+                embed.description = f"{adventure_txt}\n{normal_text}"
                 if session.monster["image"]:
                     embed.set_thumbnail(url=session.monster["image"])
-                adventure_msg = await ctx.send(embed=embed)
+                await adventure_msg.edit(embed=embed)
             else:
-                adventure_msg = await ctx.send(f"{adventure_msg}\n{normal_text}")
+                await adventure_msg.edit(content=box(f"{adventure_txt}\n{normal_text}"))
             timeout = 30
         session.message_id = adventure_msg.id
-        start_adding_reactions(adventure_msg, self._adventure_actions, ctx.bot.loop)
+        start_adding_reactions(adventure_msg, self._adventure_run, ctx.bot.loop)
         try:
             await asyncio.wait_for(timer, timeout=timeout + 5)
         except Exception:
@@ -2950,7 +2954,7 @@ class Adventure(BaseCog):
                 sharpen_roll = random.randint(1, 100)
                 if sharpen_roll in range (1, sharpen_chance):
                     sharpen = True
-                    sharpen_bonus = max(int(sharpen_roll / 10 * 4), 2)
+                    sharpen_bonus = max(int(sharpen_chance / 10 * 4), 2)
                     msg += f"{bold(self.E(user.display_name))} sharpened the weapons of the party! 🗡+{sharpen_bonus}%.\n"     
         for user in session.fight:
             roll = random.randint(1, 20)
@@ -3009,7 +3013,7 @@ class Adventure(BaseCog):
                 melody_roll = random.randint(1, 100)
                 if melody_roll in range (1, melody_chance):
                     melody = True
-                    melody_bonus = max(int(melody_roll / 10 * 4), 2)
+                    melody_bonus = max(int(melody_chance / 10 * 4), 2)
                     msg += (
                         f"{bold(self.E(user.display_name))} whispered a dissonant melody to the enemy, "
                         f"wracking it with terrible pain! -{melody_bonus}% to magic resistance.\n"
@@ -3115,7 +3119,7 @@ class Adventure(BaseCog):
                     glyphs_roll = random.randint(1, 100)
                     if glyphs_roll in range(1, glyphs_chance):
                         glyphs = True
-                        glyphs_bonus = max(int(glyphs_roll / 10 * 4), 2)
+                        glyphs_bonus = max(int(glyphs_chance / 10 * 4), 2)
                         msg += f"{bold(self.E(user.display_name))}'s magic glyphs start glowing, amplifying all prayers! 🛐+{glyphs_bonus}%.\n"      
                 contrib_attack = int(len(fight_list) * (max(bonus_cleric, 5) + roll) / 6)
                 contrib_diplomacy = int(len(talk_list) * (max(bonus_cleric, 5) + roll) / 6)
@@ -3171,7 +3175,7 @@ class Adventure(BaseCog):
                 fury_roll = random.randint(1, 100)
                 if fury_roll in range(1, fury_chance):
                     fury = True
-                    fury_bonus = max(int(fury_roll / 10 * 4), 2)
+                    fury_bonus = max(int(fury_chance / 10 * 4), 2)
                     msg += f"{bold(self.E(user.display_name))}'s fury intimidates the enemy! 🗨 +{fury_bonus}%.\n"          
             if roll == 1:
                 msg += f"{bold(self.E(user.display_name))} accidentally offended the enemy.\n"
