@@ -1385,7 +1385,7 @@ class Adventure(BaseCog):
                 "desc": (
                     "Clerics can bless the entire group and add big bonuses to prayers, "
                     "but these can remain unanswered...\n"
-                    "Cleric's equipment is imbued with Holy Spirit, permanently increasing their prayer's efficiency.\n"
+                    "Divine aura can radiate from Clerics while praying, increasing the critical chances of fighters and wizards.\n"
                     "Use the bless command when praying in an adventure."
                 ),
             },
@@ -2370,7 +2370,7 @@ class Adventure(BaseCog):
             f"but **a{session.attribute} {session.challenge}** "
             f"is guarding it with{random.choice(self.THREATEE)}. \n\n"
         )
-        
+
         embed = discord.Embed(colour=discord.Colour.blurple())
         use_embeds = (
             await self.config.guild(ctx.guild).embed()
@@ -2415,7 +2415,7 @@ class Adventure(BaseCog):
             f"Heroes have {timeout}s to change their strategy or join the fight via reactions above!")
         timer = await self._adv_countdown(ctx, session.timer, "Time remaining: ")
         self.tasks.append(timer)
-        
+
         try:
             await asyncio.wait_for(timer, timeout=timeout + 5)
         except Exception:
@@ -2553,12 +2553,10 @@ class Adventure(BaseCog):
         fight_list = session.fight
         talk_list = session.talk
         pray_list = session.pray
-        run_list = session.run
         magic_list = session.magic
 
         challenge = session.challenge
 
-        attack, diplomacy, magic, run_msg = await self.handle_run(ctx.guild.id, attack, diplomacy, magic)
         failed = await self.handle_basilisk(ctx, failed)
         fumblelist, attack, diplomacy, magic, pray_msg = await self.handle_pray(
             ctx.guild.id, fumblelist, attack, diplomacy, magic
@@ -2571,6 +2569,19 @@ class Adventure(BaseCog):
         fumblelist, critlist, attack, magic, fight_msg = await self.handle_fight(
             ctx.guild.id, fumblelist, critlist, attack, magic, challenge
         )
+
+        runners = []
+        run_msg = ""
+        run_list = []
+        if len(list(session.run)) != 0:
+            for user in session.run:
+                flee = random.randint(1,5)
+                if flee == 1:
+                    run_list.append(user)
+                else:
+                    runners.append(self.E(user.display_name))
+            if len(runners) != 0:
+                run_msg += f"{bold(humanize_list(runners))} just ran away.\n"
 
         result_msg = run_msg + pray_msg + talk_msg + fight_msg        
         challenge_attrib = session.attribute
@@ -2600,6 +2611,7 @@ class Adventure(BaseCog):
         wizard_name_list = []
         talk_name_list = []
         pray_name_list = []
+        run_name_list = []
         for user in fight_list:
             fight_name_list.append(self.E(user.display_name))
         for user in magic_list:
@@ -2608,6 +2620,8 @@ class Adventure(BaseCog):
             talk_name_list.append(self.E(user.display_name))
         for user in pray_list:
             pray_name_list.append(self.E(user.display_name))
+        for user in run_list:
+            run_name_list.append(self.E(user.display_name))
 
         fighters = " and ".join(
             [", ".join(fight_name_list[:-1]), fight_name_list[-1]]
@@ -2630,6 +2644,8 @@ class Adventure(BaseCog):
             else pray_name_list
         )
         await calc_msg.delete()
+
+        repair_list = []
         text = ""
         if slain or persuaded and not failed:
             CR = hp + dipl
@@ -2659,30 +2675,18 @@ class Adventure(BaseCog):
             if treasure == [0, 0, 0, 0]:
                 treasure = False
 
-        failed_run_list = []
-        repair_list = []
-        for user in run_list:
-            flee = random.randint(1,5)
-            if flee == 1:
-                failed_run_list.append(user)
         if session.miniboss and failed:
-            session.participants = set(fight_list + talk_list + pray_list + magic_list + failed_run_list + fumblelist)
-            run_msg_list = []
-            for user in failed_run_list:
-                run_msg_list.append(f"{bold(self.E(user.display_name))}")
-            if len(failed_run_list) >= 1:
-                result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
+            session.participants = set(fight_list + talk_list + pray_list + magic_list + run_list + fumblelist)
+            if len(run_name_list) >= 1:
+                result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
             
             result_msg += session.miniboss["defeat"]
             await ctx.send(result_msg)
             return await self.repair_users(ctx, session.participants, " to repay a passing cleric that unfroze the group.\n", " to be unfrozen...\n")
         if session.miniboss and not slain and not persuaded:
-            session.participants = set(fight_list + talk_list + pray_list + magic_list + failed_run_list + fumblelist)
-            run_msg_list = []
-            for user in failed_run_list:
-                run_msg_list.append(f"{bold(self.E(user.display_name))}")
-            if len(failed_run_list) >= 1:
-                result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
+            session.participants = set(fight_list + talk_list + pray_list + magic_list + run_list + fumblelist)
+            if len(run_name_list) >= 1:
+                result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
             
             miniboss = session.challenge
             item = session.miniboss["requirements"][0]
@@ -2711,12 +2715,9 @@ class Adventure(BaseCog):
                 )
 
             if not slain and not persuaded:
-                users = fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist
-                run_msg_list = []
-                for user in failed_run_list:
-                    run_msg_list.append(f"{bold(self.E(user.display_name))}")
-                if len(failed_run_list) >= 1:
-                    result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
+                users = fight_list + magic_list + talk_list + pray_list + run_list + fumblelist
+                if len(run_name_list) >= 1:
+                    result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
                 repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
                 options = [
                     f"No amount of diplomacy or valiant fighting could save you.\n",
@@ -2805,12 +2806,9 @@ class Adventure(BaseCog):
                 )
 
             if not slain and not persuaded:
-                users = fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist
-                run_msg_list = []
-                for user in failed_run_list:
-                    run_msg_list.append(f"{bold(self.E(user.display_name))}")
-                if len(failed_run_list) >= 1:
-                    result_msg += (f"\n{humanize_list(run_msg_list)} wanted to run away but froze in fear.")
+                users = fight_list + magic_list + talk_list + pray_list + run_list + fumblelist
+                if len(run_name_list) >= 1:
+                    result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
                 repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
                 options = [
                     f"No amount of diplomacy or valiant fighting could save you.\n",
@@ -2824,7 +2822,7 @@ class Adventure(BaseCog):
         for repairs in repair_list:
             await self.repair_users(ctx, repairs[0], repairs[1], repairs[2])
         await self._data_check(ctx)
-        session.participants = set(fight_list + magic_list + talk_list + pray_list + failed_run_list + fumblelist)
+        session.participants = set(fight_list + magic_list + talk_list + pray_list + run_list + fumblelist)
 
     async def repair_users(self, ctx, users, repair_msg = " to repair their gear.\n", fail_repair_msg = " to have their gear repaired...\n"):
         currency_name = await bank.get_currency_name(ctx.author.guild)
@@ -2887,19 +2885,6 @@ class Adventure(BaseCog):
                 pass
             await self.config.user(user).set(c._to_json())
 
-    async def handle_run(self, guild_id, attack, diplomacy, magic):
-        runners = []
-        msg = ""
-        session = self._sessions[guild_id]
-        if len(list(session.run)) != 0:
-            for user in session.run:
-                attack -= 1
-                diplomacy -= 1
-                magic -= 1
-                runners.append(self.E(user.display_name))
-            msg += f"{bold(humanize_list(runners))} just ran away.\n"
-        return (attack, diplomacy, magic, msg)
-
     async def handle_fight(self, guild_id, fumblelist, critlist, attack, magic, challenge):
         session = self._sessions[guild_id]
         pdef = self.MONSTERS[challenge]["pdef"]
@@ -2908,6 +2893,8 @@ class Adventure(BaseCog):
         sharpen_bonus = 0 #Tinkerer bonus initilized to 0
         melody = False #Bard bonus can only be triggered once if melody is false
         melody_bonus = 0 #Bard bonus initilized to 0
+        aura = False #Cleric bonus can only be triggered once if aura is false
+        aura_bonus = 0 #Cleric bonus initilized to 0
         # make sure we pass this check first
         if len(session.fight + session.magic) >= 1:
             msg = ""
@@ -2951,15 +2938,32 @@ class Adventure(BaseCog):
                 continue
             bonus_tinkerer = c.att + c.skill["att"]
             if c.heroclass["name"] == "Tinkerer" and not sharpen:
-                sharpen_chance = min(int(bonus_tinkerer / 2.5 + 1), 25)
+                sharpen_chance = min(int(bonus_tinkerer / 2.5 + 1), c.lvl)
                 sharpen_roll = random.randint(1, 100)
                 if sharpen_roll in range (1, sharpen_chance):
                     sharpen = True
-                    sharpen_bonus = max(int(sharpen_chance / 10 * 4), 2)
-                    msg += f"{bold(self.E(user.display_name))} sharpened the weapons of the party! 🗡+{sharpen_bonus}%.\n"     
+                    sharpen_bonus = int(sharpen_chance * 0.4) + 3
+                    msg += f"{bold(self.E(user.display_name))} sharpened the weapons of the party! 🗡+{sharpen_bonus}%.\n"
+        for user in session.pray: #check if a cleric is praying and calculate the possible bonus
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
+            bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
+            if c.heroclass["name"] == "Cleric" and not aura:
+                aura_chance = min(int(bonus_cleric / 2 + 1), c.lvl)
+                aura_roll = random.randint(1, 100)
+                if aura_roll in range (1, aura_chance):
+                    aura = True
+                    aura_bonus = int(aura_chance * 0.2)
+                    msg += (
+                        f"A holy aura starts surrounding {bold(self.E(user.display_name))} while praying! "
+                        f"🗡/🌟 critical chance +{aura_chance}%.\n"
+                    )
         for user in session.fight:
             roll = random.randint(1, 20)
-            crit_roll = random.randint(1, 20)
+            crit_roll = min(random.randint(1, 20) + aura_bonus, 20)
             try:
                 c = await Character._from_json(self.config, user)
             except Exception:
@@ -3010,18 +3014,18 @@ class Adventure(BaseCog):
                 continue
             bonus_bard = int((c.int + c.skill["int"] + c.cha + c.skill["cha"]) / 2)
             if c.heroclass["name"] == "Bard" and not melody:
-                melody_chance = min(int(bonus_bard / 2.5 + 1), 25)
+                melody_chance = min(int(bonus_bard / 2.5 + 1), c.lvl)
                 melody_roll = random.randint(1, 100)
                 if melody_roll in range (1, melody_chance):
                     melody = True
-                    melody_bonus = max(int(melody_chance / 10 * 4), 2)
+                    melody_bonus = int(melody_chance * 0.4) + 3
                     msg += (
                         f"{bold(self.E(user.display_name))} whispered a dissonant melody to the enemy, "
                         f"wracking it with terrible pain! -{melody_bonus}% to magic resistance.\n"
                     )
         for user in session.magic:
             roll = random.randint(1, 20)
-            crit_roll = random.randint(1, 20)
+            crit_roll = min(random.randint(1, 20) + aura_bonus, 20)
             try:
                 c = await Character._from_json(self.config, user)
             except Exception:
@@ -3078,76 +3082,77 @@ class Adventure(BaseCog):
         pray_list = session.pray
         fight_list = session.fight
         magic_list = session.magic
+        if len(pray_list) >= 1:
+            msg = ""
+        else:
+            return (fumblelist, attack, diplomacy, magic, "")
         god = await self.config.god_name()
         if await self.config.guild(self.bot.get_guild(guild_id)).god_name():
             god = await self.config.guild(self.bot.get_guild(guild_id)).god_name()
-        msg = ""
+        
         glyphs = False
-        glyphs_bonus = 0                       
+        glyphs_bonus = 0
+        pray_list_name = []
+        for user in pray_list:
+            pray_list_name.append(self.E(user.display_name))
+        total_size = len(fight_list + talk_list + magic_list)
+        for user in magic_list:
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
+            if c.heroclass["name"] == "Wizard" and not glyphs:
+                glyphs_power = (c.int + c.skill["int"] + c.cha + c.skill["cha"]) / 2
+                glyphs_chance = min(int(glyphs_power / 2.5 + 1), c.lvl)
+                glyphs_roll = random.randint(1, 100)
+                if glyphs_roll in range(1, glyphs_chance):
+                    glyphs = True
+                    glyphs_bonus = int(glyphs_chance * 0.4) + 3
+                    msg += f"{bold(self.E(user.display_name))}'s magic glyphs start glowing, amplifying all prayers! 🛐+{glyphs_bonus}%.\n"
         for user in pray_list:
             try:
                 c = await Character._from_json(self.config, user)
             except Exception:
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
-            bonus_cleric = 0                   
-            if c.heroclass["name"] == "Cleric":
-                bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
+            pray_bonus = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
             roll = random.randint(1, 20)
-            if len(fight_list + talk_list + magic_list) == 0 or roll == 1: #fumble in case no one is fighting, talking, using magic or if roll 1
-                if len(fight_list + talk_list + magic_list) == 0:
+            pray_score = pray_bonus + roll
+            if total_size == 0 or roll == 1: #fumble in case no one is fighting, talking, using magic or if roll 1
+                if total_size == 0:
+                    attrib = f"a madman" if len(pray_list) == 1 else f"madmen"
+                    msg += f"{bold(humanize_list(pray_list_name))} blessed like {attrib} but nobody was there to receive it.\n"
+                elif c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #malus but no fumble if the user is cleric with activated ability
+                    contrib_attack = int(((len(fight_list) / total_size) * pray_score - len(fight_list)) * (1 + (glyphs_bonus / 100)))
+                    contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score - len(talk_list)) * (1 + (glyphs_bonus / 100)))
+                    contrib_magic = int(((len(magic_list) / total_size) * pray_score - len(magic_list)) * (1 + (glyphs_bonus / 100)))
+                    attack += contrib_attack
+                    diplomacy += contrib_diplomacy
+                    magic += contrib_magic             
                     msg += (
-                        f"{bold(self.E(user.display_name))} blessed like a "
-                        "madman but nobody was there to receive it.\n"
+                        f"{bold(self.E(user.display_name))}'s sermon almost offended the mighty {god}: "
+                        f"(+{contrib_attack}🗡/+{contrib_diplomacy}🗨/+{contrib_magic}🌟).\n"
                     )
-                elif c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #small bonus if the user is cleric with activated ability
-                    msg += (
-                        f"{bold(self.E(user.display_name))}'s sermon almost offended the mighty {god}. "
-                        f"({len(fight_list)}🗡/{len(talk_list)}🗨/{len(magic_list)}🌟)\n"
-                    )
-                    attack += len(fight_list)
-                    diplomacy += len(talk_list)
-                    magic += len(magic_list)
                 else: # roll 1 and no cleric's bonus activated
                     msg += f"{bold(self.E(user.display_name))}'s prayers went unanswered.\n"
                 fumblelist.append(user)
             else:
                 if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #cleric ability triggers critical hit when roll isn't 1
                     roll = 20
-                if c.heroclass["name"] == "Wizard" and not glyphs:
-                    glyphs_power = (c.int + c.skill["int"] + c.cha + c.skill["cha"]) / 2
-                    glyphs_chance = min(int(glyphs_power / 2.5 + 1), 25)
-                    glyphs_roll = random.randint(1, 100)
-                    if glyphs_roll in range(1, glyphs_chance):
-                        glyphs = True
-                        glyphs_bonus = max(int(glyphs_chance / 10 * 4), 2)
-                        msg += f"{bold(self.E(user.display_name))}'s magic glyphs start glowing, amplifying all prayers! 🛐+{glyphs_bonus}%.\n"      
-                contrib_attack = int(len(fight_list) * (max(bonus_cleric, 5) + roll) / 6)
-                contrib_diplomacy = int(len(talk_list) * (max(bonus_cleric, 5) + roll) / 6)
-                contrib_magic = int(len(magic_list) * (max(bonus_cleric, 5) + roll) / 6)
+                contrib_attack = int(((len(fight_list) / total_size) * pray_score + len(fight_list)) * (1 + (glyphs_bonus / 100)))
+                contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score + len(talk_list)) * (1 + (glyphs_bonus / 100)))
+                contrib_magic = int(((len(magic_list) / total_size) * pray_score + len(magic_list)) * (1 + (glyphs_bonus / 100)))
                 attack += contrib_attack
                 diplomacy += contrib_diplomacy
                 magic += contrib_magic
                 if roll == 20: #critical hit
-                    msg += (
-                        f"{bold(self.E(user.display_name))} "
-                        f"turned into an avatar of mighty {god}. "
-                        f"(+{contrib_attack}🗡/+{contrib_diplomacy}🗨/+{contrib_magic}🌟)\n"
-                    )
+                    msg += f"{bold(self.E(user.display_name))} turned into an avatar of mighty {god}: "
                 elif c.heroclass["name"] == "Cleric":
-                    msg += (
-                        f"{bold(self.E(user.display_name))} blessed you all in {god}'s name. "
-                        f"(+{contrib_attack}🗡/+{contrib_diplomacy}🗨/+{contrib_magic}🌟)\n"
-                    )
+                    msg += f"{bold(self.E(user.display_name))} blessed you all in {god}'s name: "
                 else:
-                    msg += (
-                        f"{bold(self.E(user.display_name))}'s prayer "
-                        f"called upon the mighty {god} to help you. "
-                        f"(+{contrib_attack}🗡/+{contrib_diplomacy}🗨/+{contrib_magic}🌟)\n"
-                    )
-        attack =  int(attack * (1 + (glyphs_bonus / 100)))
-        diplomacy = int(diplomacy * (1 + (glyphs_bonus / 100)))
-        magic = int(magic * (1 + (glyphs_bonus / 100)))
+                    msg += f"{bold(self.E(user.display_name))}'s prayer called upon the mighty {god} to help you: "
+                msg += f"(+{contrib_attack}🗡/+{contrib_diplomacy}🗨/+{contrib_magic}🌟).\n"
         for user in fumblelist:
             if user in pray_list:
                 pray_list.remove(user)
@@ -3183,10 +3188,11 @@ class Adventure(BaseCog):
                 fumblelist.append(user)
                 if c.heroclass["name"] == "Bard" and c.heroclass["ability"]:
                     bonus = random.randint(5, 15)
-                    diplomacy += roll - bonus + dipl_value
+                    hero_talk = roll - bonus + dipl_value
+                    diplomacy += hero_talk
                     report += (
                         f"| {bold(self.E(user.display_name))} "
-                        f"🎲({roll}) -💥{bonus} +🗨{str(dipl_value)} | "
+                        f"🎲({roll}) -💥{bonus} +🗨{str(dipl_value)} did 🗨{hero_talk} | "
                     )
             elif roll == 20 or c.heroclass["name"] == "Bard" and c.heroclass["ability"]:
                 ability = ""
@@ -3196,16 +3202,18 @@ class Adventure(BaseCog):
                 if c.heroclass["ability"]:
                     ability = "🎵"
                 bonus = random.randint(5, 15)
-                diplomacy += roll + bonus + dipl_value
+                hero_talk = roll - bonus + dipl_value
+                diplomacy += hero_talk
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))} "
-                    f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)} | "
+                    f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)} did 🗨{hero_talk} | "
                 )
             else:
-                diplomacy += roll + dipl_value
+                hero_talk = roll + dipl_value
+                diplomacy += hero_talk
                 report += (
-                    f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)} | "
+                    f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)} did 🗨{hero_talk} | "
                 )
         diplomacy = int(diplomacy * (1 + (fury_bonus / 100)))
         msg = msg + report + "\n"
