@@ -2189,9 +2189,8 @@ class Adventure(BaseCog):
 
         group = None
         if not challenge:
-            group_txt = f"{self.E(ctx.author.display_name)} is gathering players for an adventure!"
             try:
-                group, group_msg = await self._group(ctx, group_txt, challenge)
+                group, group_msg = await self._group(ctx, challenge)
                 total_att = 0
                 total_int = 0
                 total_cha = 0
@@ -2260,10 +2259,11 @@ class Adventure(BaseCog):
                 challenge = challenges[i]
         return challenge
 
-    async def _group(self, ctx, group_msg, challenge=None):
+    async def _group(self, ctx, challenge=None):
         embed = discord.Embed(colour=discord.Colour.blurple())
-        embed.description = f"{ctx.author.display_name} is going on an adventure."
+        embed.description = f"{self.E(ctx.author.display_name)} is going on an adventure."
         adventure_msg = await ctx.send(embed=embed)
+        
         timeout = 30
         timer = await self._adv_countdown(ctx, timeout, "Time remaining: ")
         self.tasks.append(timer)
@@ -2278,10 +2278,10 @@ class Adventure(BaseCog):
         )
         
         if use_embeds:
-            embed.description = f"{group_msg}\n{normal_text}"
+            embed.description = f"{normal_text}"
             group_msg = await ctx.send(embed=embed)
         else:
-            group_msg = await ctx.send( f"{group_msg}\n{normal_text}")
+            group_msg = await ctx.send(f"{normal_text}")
         
         self._groups[ctx.guild.id] = AdventureGroup(guild=ctx.guild, message_id=group_msg.id)
 
@@ -2362,28 +2362,21 @@ class Adventure(BaseCog):
             f"but **a{session.attribute} {session.challenge}** "
             "just landed in front of you glaring! \n\n"
             "Is your group strong enough to handle this challenge?!\n"
-            "What will you do and will any other heroes help your cause?\n"
-            "Heroes have 90s to participate via reaction:"
         )
         basilisk_text = (
             f"but **a{session.attribute} {session.challenge}** stepped out looking around. \n\n"
-            "What will you do and will any other heroes help your cause?\n"
-            "Heroes have 60s to participate via reaction:"
         )
         normal_text = (
             f"but **a{session.attribute} {session.challenge}** "
             f"is guarding it with{random.choice(self.THREATEE)}. \n\n"
-            "What will you do and will any other heroes help your cause?\n"
-            "Heroes have 30s to participate via reaction:"
         )
-
-        timer = await self._adv_countdown(ctx, session.timer, "Time remaining: ")
-        self.tasks.append(timer)
+        
         embed = discord.Embed(colour=discord.Colour.blurple())
         use_embeds = (
             await self.config.guild(ctx.guild).embed()
             and ctx.channel.permissions_for(ctx.me).embed_links
         )
+
         if session.boss:
             if use_embeds:
                 embed.description = f"{adventure_txt}\n{dragon_text}"
@@ -2393,7 +2386,7 @@ class Adventure(BaseCog):
                 await adventure_msg.edit(embed=embed)
             else:
                 await adventure_msg.edit(content=box(f"{adventure_txt}\n{dragon_text}"))
-            timeout = 120
+            timeout = 90
 
         elif session.miniboss:
             if use_embeds:
@@ -2416,13 +2409,21 @@ class Adventure(BaseCog):
             timeout = 30
         session.message_id = adventure_msg.id
         start_adding_reactions(adventure_msg, self._adventure_run, ctx.bot.loop)
+
+        found_msg = await ctx.send(f"Your group encountered a monster!\n"
+            f"What will you do and will any other heroes help your cause?\n"
+            f"Heroes have {timeout}s to change their strategy or join the fight via reactions above!")
+        timer = await self._adv_countdown(ctx, session.timer, "Time remaining: ")
+        self.tasks.append(timer)
+        
         try:
             await asyncio.wait_for(timer, timeout=timeout + 5)
         except Exception:
             timer.cancel()
             log.error("Error with the countdown timer", exc_info=True)
             pass
-
+        
+        await found_msg.delete()
         return await self._result(ctx, adventure_msg)
 
     async def on_reaction_add(self, reaction, user):
