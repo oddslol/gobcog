@@ -2524,22 +2524,8 @@ class Adventure(BaseCog):
         talk_list = session.talk
         pray_list = session.pray
         magic_list = session.magic
-
         challenge = session.challenge
-
-        failed = await self.handle_basilisk(ctx, failed)
-        fumblelist, attack, diplomacy, magic, pray_msg = await self.handle_pray(
-            ctx.guild.id, fumblelist, attack, diplomacy, magic
-        )
-        fumblelist, critlist, diplomacy, talk_msg = await self.handle_talk(
-            ctx.guild.id, fumblelist, critlist, diplomacy
-        )
-
-        # need to pass challenge because we need to query MONSTERS[challenge]["pdef"] (and mdef)
-        fumblelist, critlist, attack, magic, fight_msg = await self.handle_fight(
-            ctx.guild.id, fumblelist, critlist, attack, magic, challenge
-        )
-
+        
         runners = []
         run_msg = ""
         run_list = []
@@ -2552,6 +2538,19 @@ class Adventure(BaseCog):
                     runners.append(self.E(user.display_name))
             if len(runners) != 0:
                 run_msg += f"{bold(humanize_list(runners))} just ran away.\n"
+        
+        failed = await self.handle_basilisk(ctx, failed)
+        fumblelist, attack, diplomacy, magic, pray_msg = await self.handle_pray(
+            ctx.guild.id, fumblelist, attack, diplomacy, magic
+        )
+        fumblelist, critlist, diplomacy, talk_msg = await self.handle_talk(
+            ctx.guild.id, fumblelist, critlist, diplomacy
+        )
+
+        # need to pass challenge because we need to query MONSTERS[challenge]["pdef"] (and mdef)
+        fumblelist, critlist, attack, magic, fight_msg = await self.handle_fight(
+            ctx.guild.id, fumblelist, critlist, attack, magic, challenge
+        )
 
         result_msg = run_msg + pray_msg + talk_msg + fight_msg        
         challenge_attrib = session.attribute
@@ -2649,7 +2648,6 @@ class Adventure(BaseCog):
             session.participants = set(fight_list + talk_list + pray_list + magic_list + run_list + fumblelist)
             if len(run_name_list) >= 1:
                 result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
-            
             result_msg += session.miniboss["defeat"]
             await ctx.send(result_msg)
             return await self.repair_users(ctx, session.participants, " to repay a passing cleric that unfroze the group.\n", " to be unfrozen...\n")
@@ -2657,7 +2655,6 @@ class Adventure(BaseCog):
             session.participants = set(fight_list + talk_list + pray_list + magic_list + run_list + fumblelist)
             if len(run_name_list) >= 1:
                 result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
-            
             miniboss = session.challenge
             item = session.miniboss["requirements"][0]
             special = session.miniboss["special"]
@@ -2666,6 +2663,7 @@ class Adventure(BaseCog):
                 f"{special}, but he still managed to kill you."
             )
             repair_list.append([session.participants, " to repay a passing cleric that resurrected the group.\n", " to be resurrected...\n"])
+        
         amount = hp + dipl
         if people == 1:
             if slain:
