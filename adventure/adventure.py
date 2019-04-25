@@ -2245,16 +2245,16 @@ class Adventure(BaseCog):
         i = 0
         challenge = challenges[i]
         boss_roll = random.randint(1, 20)
+        strongest_stat = max(att, magic, dipl)
+        hp_dipl = "hp" if strongest_stat == att or magic else "dipl"
+        x = 0.4
+        x += strongest_stat/1000
         if boss_roll == 20:
              while not self.MONSTERS[challenge]["boss"] and i < len(challenges):
                 i += 1
                 challenge = challenges[i]
-        elif max(att, magic, dipl) == att or magic:
-            while self.MONSTERS[challenge]["hp"] < (0.4 * max(att, magic)) or self.MONSTERS[challenge]["hp"] > (0.8 * max(att, magic)) and i < len(challenges):
-                i += 1
-                challenge = challenges[i]
         else:
-            while self.MONSTERS[challenge]["dipl"] < (0.4 * dipl) or self.MONSTERS[challenge]["dipl"] > (0.8 * dipl) and i < len(challenges):
+            while self.MONSTERS[challenge][hp_dipl] < (x * strongest_stat) or self.MONSTERS[challenge][hp_dipl] > (2 * x * strongest_stat) and i < len(challenges):
                 i += 1
                 challenge = challenges[i]
         return challenge
@@ -3215,7 +3215,7 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = 0.5 if (c.heroclass["name"] == "Bard" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + dipl_value) * bonus_multi))
-                hero_talk = roll - bonus + dipl_value
+                hero_talk = roll + bonus + dipl_value
                 diplomacy += hero_talk
                 bonus = ability + str(bonus)
                 report += (
