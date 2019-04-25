@@ -3092,10 +3092,14 @@ class Adventure(BaseCog):
         
         glyphs = False
         glyphs_bonus = 0
-        pray_list_name = []
-        for user in pray_list:
-            pray_list_name.append(self.E(user.display_name))
         total_size = len(fight_list + talk_list + magic_list)
+        if total_size == 0:
+            pray_list_name = []
+            for user in pray_list:
+                pray_list_name.append(self.E(user.display_name))
+            attrib = f"a madman" if len(pray_list_name) == 1 else f"madmen"
+            msg += f"{bold(humanize_list(pray_list_name))} blessed like {attrib} but nobody was there to receive it.\n"
+            return (fumblelist, attack, diplomacy, magic, msg)
         for user in magic_list:
             try:
                 c = await Character._from_json(self.config, user)
@@ -3119,11 +3123,8 @@ class Adventure(BaseCog):
             pray_bonus = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
             roll = random.randint(1, 20)
             pray_score = pray_bonus + roll
-            if total_size == 0 or roll == 1: #fumble in case no one is fighting, talking, using magic or if roll 1
-                if total_size == 0:
-                    attrib = f"a madman" if len(pray_list) == 1 else f"madmen"
-                    msg += f"{bold(humanize_list(pray_list_name))} blessed like {attrib} but nobody was there to receive it.\n"
-                elif c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #malus but no fumble if the user is cleric with activated ability
+            if roll == 1: #fumble if roll 1
+                if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #malus but no fumble if the user is cleric with activated ability
                     contrib_attack = int(((len(fight_list) / total_size) * pray_score - len(fight_list)) * (1 + (glyphs_bonus / 100)))
                     contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score - len(talk_list)) * (1 + (glyphs_bonus / 100)))
                     contrib_magic = int(((len(magic_list) / total_size) * pray_score - len(magic_list)) * (1 + (glyphs_bonus / 100)))
@@ -3153,6 +3154,7 @@ class Adventure(BaseCog):
                 else:
                     msg += f"{bold(self.E(user.display_name))}'s prayer called upon the mighty {god} to help you: "
                 msg += f"(+{contrib_attack}🗡/+{contrib_diplomacy}🗨/+{contrib_magic}🌟).\n"
+
         for user in fumblelist:
             if user in pray_list:
                 pray_list.remove(user)
