@@ -442,6 +442,8 @@ class Character(Item):
                 backpack[item.name] = item
         else:
             backpack = {n: Item._from_json({n: i}) for n, i in data["backpack"].items()}
+        if len(data["treasure"]) < 4:
+            data["treasure"].append(0)
         # log.debug(data["items"]["backpack"])
         hero_data = {
             "exp": data["exp"],
