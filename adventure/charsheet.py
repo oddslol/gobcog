@@ -120,6 +120,22 @@ class Item:
             }
         }
 
+class AdventureGroup:
+    guild: discord.Guild
+    message_id: int
+    participants: Set[discord.Member] = set()
+    fight: List[discord.Member] = []
+    magic: List[discord.Member] = []
+    talk: List[discord.Member] = []
+    pray: List[discord.Member] = []
+
+    def __init__(self, **kwargs):
+        self.message_id: int = kwargs.pop("message_id")
+        self.participants: Set[discord.Member] = set()
+        self.fight: List[discord.Member] = []
+        self.magic: List[discord.Member] = []
+        self.talk: List[discord.Member] = []
+        self.pray: List[discord.Member] = []
 
 class GameSession:
     """A class to represent and hold current game sessions per server"""
@@ -208,7 +224,9 @@ class Character(Item):
         """
             Define str to be our default look for the character sheet :thinkies:
         """
-        next_lvl = int((self.lvl + 1) ** 4)
+        total_xp = 0
+        for lvl in range(1, self.lvl + 1):
+            total_xp += 10 * (lvl ** 2) + ((lvl-1) * 100) + 100
         if self.heroclass != {} and "name" in self.heroclass:
             class_desc = self.heroclass["name"] + "\n\n" + self.heroclass["desc"]
             if self.heroclass["name"] == "Ranger":
@@ -226,7 +244,7 @@ class Character(Item):
             f"INTELLIGENCE: {self.int} [+{self.skill['int']}] - "
             f"DIPLOMACY: {self.cha} [+{self.skill['cha']}] -\n\n- "
             f"Currency: {self.bal} \n- "
-            f"Experience: {round(self.exp)}/{next_lvl} \n- "
+            f"Experience: {round(self.exp)}/{total_xp} \n- "
             f"Unspent skillpoints: {self.skill['pool']}\n\n"
             f"Items Equipped:{self.__equipment__()}"
         )
@@ -424,6 +442,8 @@ class Character(Item):
                 backpack[item.name] = item
         else:
             backpack = {n: Item._from_json({n: i}) for n, i in data["backpack"].items()}
+        if len(data["treasure"]) < 4:
+            data["treasure"].append(0)
         # log.debug(data["items"]["backpack"])
         hero_data = {
             "exp": data["exp"],
