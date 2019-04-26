@@ -2827,7 +2827,7 @@ class Adventure(BaseCog):
                     loss_list.append(f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}")
                 else:
                     naked_list.append(f"{bold(self.E(user.display_name))}")                    
-            repair_text = ("" if not loss_list else f"{humanize_list(loss_list)} {repair_msg}. ")
+            repair_text = ("" if not loss_list else f"{humanize_list(loss_list)} {repair_msg}")
             repair_text +=  ("" if not naked_list else f"{humanize_list(naked_list)} own nothing to repair.")
             await ctx.send(repair_text)
         
