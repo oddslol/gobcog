@@ -2158,6 +2158,7 @@ class Adventure(BaseCog):
             challenge = None
 
         group = None
+        group_msg = None
         if not challenge:
             try:
                 group, group_msg = await self._group(ctx, challenge)
@@ -2347,6 +2348,8 @@ class Adventure(BaseCog):
             and ctx.channel.permissions_for(ctx.me).embed_links
         )
 
+        if not adventure_msg:
+            adventure_msg = await ctx.send("")
         if session.boss:
             if use_embeds:
                 embed.description = f"{adventure_txt}\n{dragon_text}"
@@ -2808,13 +2811,13 @@ class Adventure(BaseCog):
                 if "normal" in current_item.rarity:
                     repair_cost += 10
                 elif "rare" in current_item.rarity:
-                    repair_cost += 50
+                    repair_cost += 25
                 elif "epic" in current_item.rarity:
-                    repair_cost += 250
+                    repair_cost += 100
                 elif "legendary" in current_item.rarity:
-                    repair_cost += 1250
+                    repair_cost += 250
                 elif "forged" in current_item.rarity:  # specialised equipment, hard to repair!
-                    repair_cost += 2500
+                    repair_cost += 500
             try:
                 await bank.withdraw_credits(user, repair_cost)
                 repaired.append([user, repair_cost])
@@ -3638,7 +3641,7 @@ class Adventure(BaseCog):
             base = (100, 500)
         else:
             base = (10, 200)
-        price = random.randint(base[0], base[1]) * max(item.att + item.cha, 1)
+        price = random.randint(base[0], base[1]) * max(item.att + item.cha + item.int, 1)
         await bank.deposit_credits(user, price)
         return price
 
