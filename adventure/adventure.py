@@ -2349,7 +2349,7 @@ class Adventure(BaseCog):
         )
 
         if not adventure_msg:
-            adventure_msg = await ctx.send("")
+            adventure_msg = await ctx.send(f"Special Challenge")
         if session.boss:
             if use_embeds:
                 embed.description = f"{adventure_txt}\n{dragon_text}"
@@ -2831,7 +2831,7 @@ class Adventure(BaseCog):
                 else:
                     naked_list.append(f"{bold(self.E(user.display_name))}")                    
             repair_text = ("" if not loss_list else f"{humanize_list(loss_list)} {repair_msg}")
-            repair_text +=  ("" if not naked_list else f"{humanize_list(naked_list)} own nothing to repair.")
+            repair_text +=  ("" if not naked_list else f"{humanize_list(naked_list)} had nothing to repair.")
             await ctx.send(repair_text)
         
         for user, loss in broke:
