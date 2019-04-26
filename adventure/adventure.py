@@ -2963,7 +2963,7 @@ class Adventure(BaseCog):
                     bonus = ability + str(bonus)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) -💥{bonus} +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
+                        f"🎲({roll}) -💥{bonus} +🗡{str(att_value)} did **🗡{hero_dmg} dmg** | "
                     )
             elif crit_roll == 20 or (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]):
                 ability = ""
@@ -2980,13 +2980,13 @@ class Adventure(BaseCog):
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
+                    f"🎲({roll}) +💥{bonus} +🗡{str(att_value)} did **🗡{hero_dmg} dmg** | "
                 )
             else:
                 hero_dmg = int((roll + att_value) * (1 + (sharpen_bonus / 100)) / pdef) 
                 attack += hero_dmg
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did 🗡{hero_dmg} dmg | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did **🗡{hero_dmg} dmg** | "
                 )
         for user in session.magic: #check if a bard is in the magic party and calculate the possible bonus
             try:
@@ -3027,7 +3027,7 @@ class Adventure(BaseCog):
                     bonus = ability + str(bonus)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) -💥{bonus} +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
+                        f"🎲({roll}) -💥{bonus} +🌟{str(int_value)} did **🌟{hero_dmg} dmg** | "
                     )
             elif crit_roll == 20 or (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]):
                 ability = ""
@@ -3044,13 +3044,13 @@ class Adventure(BaseCog):
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
+                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)} did **🌟{hero_dmg} dmg** | "
                 )
             else:
                 hero_dmg = int((roll + int_value) / (mdef - (melody_bonus / 100)))
                 magic += hero_dmg
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did 🌟{hero_dmg} dmg | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did **🌟{hero_dmg} dmg** | "
                 )
         msg = msg + report + "\n"
         for user in fumblelist:
@@ -3119,7 +3119,7 @@ class Adventure(BaseCog):
                     msg += f"{bold(self.E(user.display_name))}'s sermon almost offended the mighty {god}: "
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) +🛐{str(pray_bonus)} did {contrib_attack}🗡/{contrib_diplomacy}🗨/{contrib_magic}🌟 | "
+                        f"🎲({roll}) +🛐{str(pray_bonus)} did **{contrib_attack}🗡/{contrib_diplomacy}🗨/{contrib_magic}🌟** | "
                     )
                 else: # roll 1 and no cleric's bonus activated
                     msg += f"{bold(self.E(user.display_name))}'s prayers went unanswered.\n"
@@ -3137,7 +3137,7 @@ class Adventure(BaseCog):
                     msg += f"{bold(self.E(user.display_name))} turned into an avatar of mighty {god}: "
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +🛐{str(pray_bonus)} did {contrib_attack}🗡/{contrib_diplomacy}🗨/{contrib_magic}🌟 | "
+                    f"🎲({roll}) +🛐{str(pray_bonus)} did **{contrib_attack}🗡/{contrib_diplomacy}🗨/{contrib_magic}🌟** | "
                 )
         msg = msg + report + "\n"
         for user in fumblelist:
@@ -3183,7 +3183,7 @@ class Adventure(BaseCog):
                     bonus = ability + str(bonus)
                     report += (
                         f"| {bold(self.E(user.display_name))} "
-                        f"🎲({roll}) -💥{bonus} +🗨{str(dipl_value)} did 🗨{hero_talk} | "
+                        f"🎲({roll}) -💥{bonus} +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
                     )
             elif roll == 20 or c.heroclass["name"] == "Bard" and c.heroclass["ability"]:
                 ability = ""
@@ -3200,13 +3200,13 @@ class Adventure(BaseCog):
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))} "
-                    f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)} did 🗨{hero_talk} | "
+                    f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
                 )
             else:
                 hero_talk = roll + dipl_value
                 diplomacy += hero_talk
                 report += (
-                    f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)} did 🗨{hero_talk} | "
+                    f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
                 )
         diplomacy = int(diplomacy * (1 + (fury_bonus / 100)))
         msg = msg + report + "\n"
