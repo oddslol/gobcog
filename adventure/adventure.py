@@ -2159,6 +2159,7 @@ class Adventure(BaseCog):
 
         group = None
         group_msg = None
+        amount = 1
         if not challenge:
             try:
                 group, group_msg = await self._group(ctx, challenge)
@@ -2172,14 +2173,14 @@ class Adventure(BaseCog):
                         total_int += c.int + c.skill['int'] + 10 
                         total_cha += c.cha + c.skill['cha'] + 10
                 log.debug("passing through total_att: " + str(total_att) + ", total_int: " + str(total_int) + ", total_cha: " + str(total_cha))
-                challenge = await self._find_challenge(total_att, total_int, total_cha)
+                challenge, amount = await self._find_challenge(total_att, total_int, total_cha)
             except Exception:
                 log.error("Something went wrong forming the group", exc_info=True)
                 return
 
         adventure_txt = ""
         try:
-            reward, participants = await self._simple(ctx, adventure_txt, group_msg, group, challenge)
+            reward, participants = await self._simple(ctx, adventure_txt, group_msg, group, challenge, amount)
         except Exception:
             log.error("Something went wrong controlling the game", exc_info=True)
             return
@@ -2215,20 +2216,21 @@ class Adventure(BaseCog):
         random.shuffle(challenges)  # if we take the list and shuffle it... we can iterate through it rather than rely on random.choice
         i = 0
         challenge = challenges[i]
-        boss_roll = random.randint(1, 20)
+        boss_roll = random.randint(1, 10)
         strongest_stat = max(att, magic, dipl)
         hp_dipl = "hp" if strongest_stat == att or magic else "dipl"
-        x = 0.5
-        x += strongest_stat/1000
-        if boss_roll == 20:
+        if boss_roll == 10:
              while not self.MONSTERS[challenge]["boss"] and i < len(challenges):
                 i += 1
                 challenge = challenges[i]
         else:
-            while self.MONSTERS[challenge][hp_dipl] < (x * strongest_stat) or self.MONSTERS[challenge][hp_dipl] > (2 * x * strongest_stat) and i < len(challenges):
+            while self.MONSTERS[challenge][hp_dipl] > strongest_stat and i < len(challenges):
                 i += 1
                 challenge = challenges[i]
-        return challenge
+        amount = 1
+        while self.MONSTERS[challenge][hp_dipl] * (amount+1) < strongest_stat:
+            amount += 1  
+        return challenge, amount
 
     async def _group(self, ctx, challenge=None):
         embed = discord.Embed(colour=discord.Colour.blurple())
@@ -2291,7 +2293,7 @@ class Adventure(BaseCog):
 
         return self._groups[ctx.guild.id], group_msg
 
-    async def _simple(self, ctx, adventure_txt, group_msg, group, challenge=None):
+    async def _simple(self, ctx, adventure_txt, group_msg, group, challenge, amount):
         text = ""
         if challenge and challenge.title() in list(self.MONSTERS.keys()):
             challenge = challenge.title()
@@ -2308,6 +2310,7 @@ class Adventure(BaseCog):
             timer = 30
         self._sessions[ctx.guild.id] = GameSession(
             challenge=challenge,
+            amount=amount,
             attribute=attribute,
             guild=ctx.guild,
             boss=self.MONSTERS[challenge]["boss"],
@@ -2329,17 +2332,23 @@ class Adventure(BaseCog):
 
     async def _choice(self, ctx, adventure_txt, adventure_msg):
         session = self._sessions[ctx.guild.id]
+        if session.attribute[1] in ['a', 'e', 'i', 'o', 'u']:
+            prefix = "an" if session.amount == 1 else str(session.amount)
+        else:
+            prefix = "a" if session.amount == 1 else str(session.amount)
+        is_are = "is" if session.amount == 1 else "are"
+        plural = "" if session.amount == 1 else "s"
         dragon_text = (
-            f"but **a{session.attribute} {session.challenge}** "
+            f"but **{prefix}{session.attribute} {session.challenge}{plural}** "
             "just landed in front of you glaring! \n\n"
             "Is your group strong enough to handle this challenge?!\n"
         )
         basilisk_text = (
-            f"but **a{session.attribute} {session.challenge}** stepped out looking around. \n\n"
+            f"but **{prefix}{session.attribute} {session.challenge}{plural}** stepped out looking around. \n\n"
         )
         normal_text = (
-            f"but **a{session.attribute} {session.challenge}** "
-            f"is guarding it with{random.choice(self.THREATEE)}. \n\n"
+            f"but **{prefix}{session.attribute} {session.challenge}{plural}** "
+            f"{is_are} guarding it with{random.choice(self.THREATEE)}. \n\n"
         )
 
         embed = discord.Embed(colour=discord.Colour.blurple())
@@ -2560,8 +2569,8 @@ class Adventure(BaseCog):
         result_msg = run_msg + pray_msg + talk_msg + fight_msg        
         challenge_attrib = session.attribute
 
-        hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[challenge_attrib][0]
-        dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[challenge_attrib][1]
+        hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[challenge_attrib][0] * session.amount
+        dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[challenge_attrib][1] * session.amount
 
         slain = (attack + magic) >= hp
         persuaded = diplomacy >= dipl

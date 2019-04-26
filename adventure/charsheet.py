@@ -141,6 +141,7 @@ class GameSession:
     """A class to represent and hold current game sessions per server"""
 
     challenge: str
+    amount: int
     attribute: str
     timer: int
     guild: discord.Guild
@@ -157,6 +158,7 @@ class GameSession:
 
     def __init__(self, **kwargs):
         self.challenge: str = kwargs.pop("challenge")
+        self.amount: int = kwargs.pop("amount")
         self.attribute: dict = kwargs.pop("attribute")
         self.guild: discord.Guild = kwargs.pop("guild")
         self.boss: bool = kwargs.pop("boss")
