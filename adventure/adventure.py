@@ -2217,7 +2217,7 @@ class Adventure(BaseCog):
         boss_roll = random.randint(1, 20)
         strongest_stat = max(att, magic, dipl)
         hp_dipl = "hp" if strongest_stat == att or magic else "dipl"
-        x = 0.4
+        x = 0.5
         x += strongest_stat/1000
         if boss_roll == 20:
              while not self.MONSTERS[challenge]["boss"] and i < len(challenges):
@@ -2797,6 +2797,7 @@ class Adventure(BaseCog):
         repaired = []
         broke = []
         loss_list = []
+        naked_list = []
         if str(currency_name).startswith("<"):
             currency_name = "credits"
         
@@ -2804,7 +2805,9 @@ class Adventure(BaseCog):
             c = await Character._from_json(self.config, user)
             repair_cost = 0 
             for current_item in c.current_equipment():
-                if "rare" in current_item.rarity:
+                if "normal" in current_item.rarity:
+                    repair_cost += 10
+                elif "rare" in current_item.rarity:
                     repair_cost += 50
                 elif "epic" in current_item.rarity:
                     repair_cost += 250
@@ -2820,8 +2823,12 @@ class Adventure(BaseCog):
         
         if len(repaired) > 0:
             for user, loss in repaired:
-                loss_list.append(f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}")
-            repair_text = ("" if not loss_list else f"{humanize_list(loss_list)} {repair_msg}")
+                if loss > 0:
+                    loss_list.append(f"{bold(self.E(user.display_name))} used {str(loss)} {currency_name}")
+                else:
+                    naked_list.append(f"{bold(self.E(user.display_name))}")                    
+            repair_text = ("" if not loss_list else f"{humanize_list(loss_list)} {repair_msg}. ")
+            repair_text +=  ("" if not naked_list else f"{humanize_list(naked_list)} own nothing to repair.")
             await ctx.send(repair_text)
         
         for user, loss in broke:
