@@ -3579,7 +3579,6 @@ class Adventure(BaseCog):
             if (
                 roll == 5
                 and c.heroclass["name"] == "Ranger"
-                and c.heroclass["ability"]
                 and c.heroclass["pet"]
             ):
                 self._rewards[user.id]["xp"] = int(xp * c.heroclass["pet"]["bonus"])
