@@ -2348,8 +2348,10 @@ class Adventure(BaseCog):
             and ctx.channel.permissions_for(ctx.me).embed_links
         )
 
+        owner_challenge = False
         if not adventure_msg:
-            adventure_msg = await ctx.send(f"Special Challenge")
+            adventure_msg = await ctx.send(f"Special challenge!")
+            owner_challenge = True
         if session.boss:
             if use_embeds:
                 embed.description = f"{adventure_txt}\n{dragon_text}"
@@ -2381,7 +2383,7 @@ class Adventure(BaseCog):
                 await adventure_msg.edit(content=box(f"{adventure_txt}\n{normal_text}"))
             timeout = 30
         session.message_id = adventure_msg.id
-        start_adding_reactions(adventure_msg, self._adventure_run, ctx.bot.loop)
+        start_adding_reactions(adventure_msg, self._adventure_actions if owner_challenge else self._adventure_run, ctx.bot.loop)
 
         found_msg = await ctx.send(f"Your group encountered a monster!\n"
             f"What will you do and will any other heroes help your cause?\n"
