@@ -3379,7 +3379,7 @@ class Adventure(BaseCog):
         await asyncio.sleep(2)
         roll = random.randint(1, 500)
 
-        if chest_type == "pet":
+        if chest_type.lower() in "pet":
             if roll == 1:
                 chance = self.TR_LEGENDARY
             elif roll <= 25:
@@ -3396,7 +3396,7 @@ class Adventure(BaseCog):
                     )
                 )
                 return None
-        if chest_type == "normal":
+        if chest_type.lower() in "normal":
             if roll == 2:
                 chance = self.TR_LEGENDARY
             elif roll <= 25:
@@ -3405,7 +3405,7 @@ class Adventure(BaseCog):
                 chance = self.TR_RARE
             else:
                 chance = self.TR_COMMON
-        if chest_type == "rare":
+        elif chest_type.lower() in "rare":
             if roll <= 10:
                 chance = self.TR_LEGENDARY
             elif roll <= 75:
@@ -3414,14 +3414,14 @@ class Adventure(BaseCog):
                 chance = self.TR_RARE
             else:
                 chance = self.TR_COMMON
-        if chest_type == "epic":
+        elif chest_type.lower() in "epic":
             if roll <= 25:
                 chance = self.TR_LEGENDARY
             elif roll <= 175:
                 chance = self.TR_EPIC
             else:
                 chance = self.TR_RARE
-        if chest_type == "legendary":
+        elif chest_type.lower() in "legendary":
             if roll <= 100:
                 chance = self.TR_LEGENDARY
             else:
