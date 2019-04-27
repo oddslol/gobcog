@@ -2837,6 +2837,7 @@ class Adventure(BaseCog):
             await ctx.send(repair_text)
         
         for user, loss in broke:
+            c = await Character._from_json(self.config, user)
             broke_msg = (f"{bold(self.E(user.display_name))} couldn't afford {str(loss)} {currency_name} {fail_repair_msg}"
                                 f"Don't worry, I'll take items from your backpack to make up for it!\n")
             msg = await ctx.send(broke_msg)
