@@ -606,7 +606,7 @@ class Adventure(BaseCog):
             await menu(ctx, msg_list, DEFAULT_CONTROLS, page=index)
 
     @loadout.command(name="equip", aliases=["load"])
-    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
+    @commands.cooldown(rate=1, per=5, type=commands.BucketType.user)
     async def equip_loadout(self, ctx, name: str):
         """Equip a saved loadout"""
         if not await self.allow_in_dm(ctx):
@@ -616,7 +616,7 @@ class Adventure(BaseCog):
         currency_name = await bank.get_currency_name(ctx.guild)
         if str(currency_name).startswith("<"):
             currency_name = "credits"
-        spend = 2000
+        spend = 1000
         msg = await ctx.send(
             box(
                 (
@@ -1355,7 +1355,7 @@ class Adventure(BaseCog):
                 "desc": (
                     "Clerics can bless the entire group and add small bonus to each adventurer, "
                     "but prayers can remain unanswered...\n"
-                    "Divine aura can radiate from Clerics while praying, increasing the critical chances of fighters and wizards.\n"
+                    "Divine aura can radiate from Clerics while praying, increasing the critical chances and abilities of fighters and wizards.\n"
                     "Use the bless command when praying in an adventure."
                 ),
             },
@@ -1376,7 +1376,7 @@ class Adventure(BaseCog):
                     "Bards can perform to aid their comrades in diplomacy.\n"
                     "Due to their natural intelligence, they learnt a little bit about magic "
                     "and have a chance to decrease magic resistance with their melodious voices.\n"
-                    "Bards are also talented with daggers and can weakened physical resistance through precision incisions.
+                    "Bards are also talented with daggers and can weaken physical resistance through precision incisions.\n"
                     "Use the music command when being diplomatic in an adventure."
                 ),
             },
@@ -2220,19 +2220,17 @@ class Adventure(BaseCog):
         boss_roll = random.randint(1, 10)
         strongest_stat = max(att, magic, dipl)
         hp_dipl = "hp" if strongest_stat == att or magic else "dipl"
-        x = 0.5
-        x += strongest_stat/1000
         if boss_roll == 10:
              while not self.MONSTERS[challenge]["boss"] and i < len(challenges):
                 i += 1
                 challenge = challenges[i]
         else:
-            while self.MONSTERS[challenge][hp_dipl] > (2 * x * strongest_stat) and i < len(challenges):
+            while self.MONSTERS[challenge][hp_dipl] > strongest_stat and i < len(challenges) and not self.MONSTERS[challenge]["boss"]:
                 i += 1
                 challenge = challenges[i]
-        amount = 0
-        while self.MONSTERS[challenge][hp_dipl] * amount < (2 * x * strongest_stat):
-            amount += 1
+        amount = 1
+        while self.MONSTERS[challenge][hp_dipl] * (amount+1) < strongest_stat:
+            amount += 1  
         return challenge, amount
 
     async def _group(self, ctx, challenge=None):
@@ -2883,13 +2881,14 @@ class Adventure(BaseCog):
         pdef = self.MONSTERS[challenge]["pdef"]
         mdef = self.MONSTERS[challenge]["mdef"]
         sharpen = False #Tinkerer bonus can only be triggered once if sharpen is false
-        sharpen_bonus = 0 #Tinkerer bonus initilized to 0
+        sharpen_bonus = 0 #Tinkerer bonus initialized to 0
         potion = False #Tinkerer bonus can only be triggered once if potion is false
-        potion_bonus = 0 #Tinkerer bonus initilized to 0
+        potion_bonus = 0 #Tinkerer bonus initialized to 0
         melody = False #Bard bonus can only be triggered once if melody is false
-        melody_bonus = 0 #Bard bonus initilized to 0
+        melody_bonus = 0 #Bard bonus initialized to 0
         aura = False #Cleric bonus can only be triggered once if aura is false
-        aura_bonus = 0 #Cleric bonus initilized to 0
+        aura_bonus = 0 #Cleric bonus initialized to 0
+        aura_chance = 0 #Clerci chance initialized to 0
         bless_bonus = 0 # Cleric active bonus initialized to 0
         incision = False #Bard bonus can only be triggered once if incision is false
         incision_bonus = 0 #Bard bonus initialized to 1
@@ -2975,14 +2974,14 @@ class Adventure(BaseCog):
                 continue
             bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
             if c.heroclass["name"] == "Cleric" and not aura:
-                aura_chance = min(int(bonus_cleric / 2 + 1), c.lvl)
+                aura_chance = min(int(bonus_cleric / 1.5 + 1), c.lvl * 2)
                 aura_roll = random.randint(1, 100)
                 if aura_roll in range (1, aura_chance):
                     aura = True
                     aura_bonus = int(aura_chance * 0.2)
                     msg += (
                         f"A holy aura starts surrounding {bold(self.E(user.display_name))} while praying! "
-                        f"*[🗡/🌟 critical chance +{aura_chance}%]*\n"
+                        f"*[🗡/🌟 critical chance +{aura_chance}% and 🗯️/⚡️ x+{aura_chance}]*\n"
                     )
             if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]:
                 bless_base = max(10, int((10 + bonus_cleric) * 0.5))
@@ -3003,7 +3002,7 @@ class Adventure(BaseCog):
                     ability = "🗯️"
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
-                    bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
+                    bonus = int(max(bonus_roll, int((roll + att_value) * bonus_multi)) * (1 + (aura_chance / 100)))
                     hero_dmg = int((roll - bonus + att_value + bless_bonus) * (1 + (sharpen_bonus / 100)) / (pdef - (incision_bonus / 100)))
                     attack += hero_dmg
                     bonus = ability + str(bonus)
@@ -3016,11 +3015,13 @@ class Adventure(BaseCog):
                 if crit_roll == 20:
                     msg += f"{bold(self.E(user.display_name))} landed a critical hit.\n"
                     critlist.append(user)
-                if c.heroclass["ability"]:
-                    ability = "🗯️"
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = 0.5 if (c.heroclass["name"] == "Berserker" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
-                bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
+                if c.heroclass["ability"]:
+                    ability = "🗯️"
+                    bonus = int(max(bonus_roll, int((roll + att_value) * bonus_multi)) * (1 + (aura_chance / 100)))
+                else:
+                    bonus = max(bonus_roll, int((roll + att_value) * bonus_multi))
                 hero_dmg = int((roll + bonus + att_value + bless_bonus) * (1 + (sharpen_bonus / 100)) / (pdef - (incision_bonus / 100)))
                 attack += hero_dmg
                 bonus = ability + str(bonus)
@@ -3067,7 +3068,7 @@ class Adventure(BaseCog):
                     ability = "⚡️"
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
-                    bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
+                    bonus = int(max(bonus_roll, int((roll + int_value) * bonus_multi)) * (1 + (aura_chance / 100)))
                     hero_dmg = int((roll - bonus + int_value + bless_bonus) * (1 + (potion_bonus / 100)) / (mdef - (melody_bonus / 100)))
                     magic += hero_dmg
                     bonus = ability + str(bonus)
@@ -3080,11 +3081,13 @@ class Adventure(BaseCog):
                 if crit_roll == 20:
                     msg += f"{bold(self.E(user.display_name))} had a surge of energy.\n"
                     critlist.append(user)
-                if c.heroclass["ability"]:
-                    ability = "⚡️"
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = 0.5 if (c.heroclass["name"] == "Wizard" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
-                bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
+                if c.heroclass["ability"]:
+                    ability = "⚡️"
+                    bonus = int(max(bonus_roll, int((roll + int_value) * bonus_multi)) * (1 + (aura_chance / 100)))
+                else:
+                    bonus = max(bonus_roll, int((roll + int_value) * bonus_multi))
                 hero_dmg = int((roll + bonus + int_value + bless_bonus) * (1 + (potion_bonus / 100)) / (mdef - (melody_bonus / 100)))
                 magic += hero_dmg
                 bonus = ability + str(bonus)
@@ -3118,6 +3121,7 @@ class Adventure(BaseCog):
         bless_list_name = []
         if len(pray_list) >= 1:
             msg = ""
+            report = ""
         else:
             return (fumblelist, attack, diplomacy, magic, "")
         god = await self.config.god_name()
@@ -3166,31 +3170,31 @@ class Adventure(BaseCog):
                 if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]:#malus that compensate the bonus granted to the party
                     pray_score = pray_score - bless_base - bless_bonus * total_size
                     msg += f"{bold(self.E(user.display_name))}'s sermon offended the mighty {god}.\n"
-                    contrib_attack = int(((len(fight_list) / total_size) * pray_score + len(fight_list)) * (1 + (glyphs_bonus / 100)))
-                    contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score + len(talk_list)) * (1 + (glyphs_bonus / 100)))
-                    contrib_magic = int(((len(magic_list) / total_size) * pray_score + len(magic_list)) * (1 + (glyphs_bonus / 100)))
+                    contrib_attack = int(((len(fight_list) / total_size) * pray_score + len(fight_list) * 2) * (1 + (glyphs_bonus / 100)))
+                    contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score + len(talk_list) * 2) * (1 + (glyphs_bonus / 100)))
+                    contrib_magic = int(((len(magic_list) / total_size) * pray_score + len(magic_list) * 2) * (1 + (glyphs_bonus / 100)))
                     attack += contrib_attack
                     diplomacy += contrib_diplomacy
                     magic += contrib_magic
                     report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +🛐{str(pray_bonus)} did **{contrib_attack}🗡/{contrib_diplomacy}🗨/{contrib_magic}🌟** | "
+                    f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/🌟{contrib_magic}** | "
                     )
                 else: #no cleric's bonus activated and roll 1
                     msg += f"{bold(self.E(user.display_name))}'s prayers went unanswered by {god}.\n"
                 fumblelist.append(user)
             elif roll == 20 : #crit hit
                 msg += f"{bold(self.E(user.display_name))} turned into an avatar of mighty {god}!\n"
-            else
-                contrib_attack = int(((len(fight_list) / total_size) * pray_score + len(fight_list)) * (1 + (glyphs_bonus / 100)))
-                contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score + len(talk_list)) * (1 + (glyphs_bonus / 100)))
-                contrib_magic = int(((len(magic_list) / total_size) * pray_score + len(magic_list)) * (1 + (glyphs_bonus / 100)))
+            else:
+                contrib_attack = int(((len(fight_list) / total_size) * pray_score + len(fight_list) * 2) * (1 + (glyphs_bonus / 100)))
+                contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score + len(talk_list) * 2) * (1 + (glyphs_bonus / 100)))
+                contrib_magic = int(((len(magic_list) / total_size) * pray_score + len(magic_list) * 2) * (1 + (glyphs_bonus / 100)))
                 attack += contrib_attack
                 diplomacy += contrib_diplomacy
                 magic += contrib_magic
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +🛐{str(pray_bonus)} did **{contrib_attack}🗡/{contrib_diplomacy}🗨/{contrib_magic}🌟** | "
+                    f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/🌟{contrib_magic}** | "
                 )
         header = "Pray Party: " if (attack + diplomacy + magic) > 0 else ""
         if len(bless_list_name) > 0:
@@ -3232,8 +3236,8 @@ class Adventure(BaseCog):
             roll = random.randint(1, 20)
             dipl_value = c.cha + c.skill["cha"]
             if c.heroclass["name"] == "Berserker" and not fury:
-                fury_power = (c.att + c.skill["att"] + c.cha + c.skill["cha"])/2
-                fury_chance = min(int(fury_power / 2.5 + 1), 25)
+                dipl_value = (c.att + c.skill["att"] + c.cha + c.skill["cha"])/2
+                fury_chance = min(int(dipl_value / 2.5 + 1), c.level)
                 fury_roll = random.randint(1, 100)
                 if fury_roll in range(1, fury_chance):
                     fury = True
