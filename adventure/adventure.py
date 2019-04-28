@@ -515,7 +515,7 @@ class Adventure(BaseCog):
                 return await ctx.send(
                     f"{self.E(ctx.author.display_name)}, ability already in use."
                 )
-            c.heroclass["ability"] = False
+            c.heroclass["ability"] = True
             await self.config.user(ctx.author).set(c._to_json())
             await ctx.send(
                 f"📜 {bold(self.E(ctx.author.display_name))} " f"is starting an inspiring sermon. 📜"
@@ -2540,7 +2540,7 @@ class Adventure(BaseCog):
         pray_list = session.pray
         magic_list = session.magic
         challenge = session.challenge
-        
+
         runners = []
         run_msg = ""
         run_list = []
@@ -2577,15 +2577,20 @@ class Adventure(BaseCog):
         persuaded = diplomacy >= dipl
         damage_str = ""
         diplo_str = ""
+        plural = "" if session.amount == 1 else "s"
+        challenge_amount = "" if session.amount == 1 else f"{session.amount} "
+        if session.amount > 1:
+            if "wolf" in challenge:
+                challenge.replace("wolf", "wolves")
         if attack or magic:
             damage_str = (
-                f"The group {'hit the' if not slain else 'killed the'} {challenge} "
+                f"The group {'hit the' if not slain else 'killed the'} {challenge_amount}{challenge}{plural} "
                 f"**({attack+magic}/{int(hp)})**.\n"
             )
         if diplomacy:
             diplo_str = (
                 f"The group {'tried to persuade' if not persuaded else 'distracted'} "
-                f"the {challenge} "
+                f"the {challenge_amount}{challenge}{plural} "
                 f"with {'flattery' if not persuaded else 'insults'}"
                 f" **({diplomacy}/{int(dipl)})**.\n"
             )
@@ -2683,7 +2688,7 @@ class Adventure(BaseCog):
         if people == 1:
             if slain:
                 group = fighters if len(fight_list) == 1 else wizards
-                text = f"{bold(group)} has slain the {session.challenge} in an epic battle!"
+                text = f"{bold(group)} has slain the {challenge_amount}{challenge}{plural} in an epic battle!"
                 text += await self._reward(
                     ctx, fight_list + magic_list + pray_list, amount, round(((attack if group == fighters else magic) / hp) * 0.2), treasure
                 )
@@ -2691,7 +2696,7 @@ class Adventure(BaseCog):
             if persuaded:
                 text = (
                     f"{bold(talkers)} almost died in battle, but confounded "
-                    f"the {session.challenge} in the last second."
+                    f"the {challenge_amount}{challenge}{plural} in the last second."
                 )
                 text += await self._reward(
                     ctx, talk_list + pray_list, amount, round((diplomacy / dipl) * 0.2), treasure
@@ -2716,7 +2721,7 @@ class Adventure(BaseCog):
                         god = await self.config.guild(ctx.guild).god_name()
                     if len(magic_list) > 0 and len(fight_list) > 0:
                         text = (
-                            f"{bold(fighters)} slayed the {session.challenge} "
+                            f"{bold(fighters)} slayed the {challenge_amount}{challenge}{plural} "
                             f"in battle, while {bold(talkers)} distracted with flattery, "
                             f"{bold(wizards)} chanted magical incantations and "
                             f"{bold(preachermen)} aided in {god}'s name."
@@ -2724,21 +2729,21 @@ class Adventure(BaseCog):
                     else:
                         group = fighters if len(fight_list) > 0 else wizards
                         text = (
-                            f"{bold(group)} slayed the {session.challenge} "
+                            f"{bold(group)} slayed the {challenge_amount}{challenge}{plural} "
                             f"in battle, while {bold(talkers)} distracted with flattery and "
                             f"{bold(preachermen)} aided in {god}'s name."
                         )
                 else:
                     if len(magic_list) > 0 and len(fight_list) > 0:
                         text = (
-                        f"{bold(fighters)} slayed the {session.challenge} "
+                        f"{bold(fighters)} slayed the {challenge_amount}{challenge}{plural} "
                         f"in battle, while {bold(talkers)} distracted with insults and "
                         f"{bold(wizards)} chanted magical incantations."
                     )
                     else:
                         group = fighters if len(fight_list) > 0 else wizards
                         text = (
-                            f"{bold(group)} slayed the {session.challenge} "
+                            f"{bold(group)} slayed the {challenge_amount}{challenge}{plural} "
                             f"in battle, while {bold(talkers)} distracted with insults."
                         )
                 text += await self._reward(
@@ -2752,11 +2757,11 @@ class Adventure(BaseCog):
             if not slain and persuaded:
                 if len(pray_list) > 0:
                     text = (
-                        f"{bold(talkers)} talked the {session.challenge} "
+                        f"{bold(talkers)} talked the {challenge_amount}{challenge}{plural} "
                         f"down with {bold(preachermen)}'s blessing."
                     )
                 else:
-                    text = f"{bold(talkers)} talked the {session.challenge} down."
+                    text = f"{bold(talkers)} talked the {challenge_amount}{challenge}{plural} down."
                 text += await self._reward(
                     ctx, talk_list + pray_list, amount, round((diplomacy / dipl) * 0.2), treasure
                 )
@@ -2765,25 +2770,25 @@ class Adventure(BaseCog):
                 if len(pray_list) > 0:
                     if len(magic_list) > 0 and len(fight_list) > 0:
                         text = (
-                            f"{bold(fighters)} killed the {session.challenge} "
+                            f"{bold(fighters)} killed the {challenge_amount}{challenge}{plural} "
                             f"in a most heroic battle with a little help from {bold(preachermen)} and "
                             f"{bold(wizards)} chanting magical incantations."
                         )
                     else:
                         group = fighters if len(fight_list) > 0 else wizards
                         text = (
-                            f"{bold(group)} killed the {session.challenge} "
+                            f"{bold(group)} killed the {challenge_amount}{challenge}{plural} "
                             f"in a most heroic battle with a little help from {bold(preachermen)}."
                         )
                 else:
                     if len(magic_list) > 0 and len(fight_list) > 0:
                         text = (
-                            f"{bold(fighters)} killed the {session.challenge} "
+                            f"{bold(fighters)} killed the {challenge_amount}{challenge}{plural} "
                             f"in a most heroic battle with {bold(wizards)} chanting magical incantations."
                         )
                     else:
                         group = fighters if len(fight_list) > 0 else wizards
-                        text = f"{bold(group)} killed the {session.challenge} in an epic fight."
+                        text = f"{bold(group)} killed the {challenge_amount}{challenge}{plural} in an epic fight."
                 text += await self._reward(
                     ctx, fight_list + magic_list + pray_list, amount, round(((attack+magic) / hp) * 0.2), treasure
                 )
@@ -2981,7 +2986,7 @@ class Adventure(BaseCog):
                     aura_bonus = int(aura_chance * 0.2)
                     msg += (
                         f"A holy aura starts surrounding {bold(self.E(user.display_name))} while praying! "
-                        f"*[🗡/🌟 critical chance +{aura_chance}% and 🗯️/⚡️ x+{aura_chance}]*\n"
+                        f"*[🗡/🌟 critical chance +{aura_chance}% and 🗯️/⚡️ +{aura_chance}]*\n"
                     )
             if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]:
                 bless_base = max(10, int((10 + bonus_cleric) * 0.5))
@@ -3162,7 +3167,7 @@ class Adventure(BaseCog):
             roll = random.randint(1, 20)
             pray_score = pray_bonus + roll
             if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #always calculate the bless bonus and its total
-                bless_base = max(10, int((10 + bonus_cleric) * 0.5))
+                bless_base = max(10, int((10 + pray_bonus) * 0.5))
                 bless_bonus = max(1, int(bless_base / total_size))
                 bless_list_name.append(self.E(user.display_name))
                 total_bless_bonus += bless_bonus
@@ -3183,9 +3188,9 @@ class Adventure(BaseCog):
                 else: #no cleric's bonus activated and roll 1
                     msg += f"{bold(self.E(user.display_name))}'s prayers went unanswered by {god}.\n"
                 fumblelist.append(user)
-            elif roll == 20 : #crit hit
-                msg += f"{bold(self.E(user.display_name))} turned into an avatar of mighty {god}!\n"
             else:
+                if roll == 20:
+                    msg += f"{bold(self.E(user.display_name))} turned into an avatar of mighty {god}!\n"
                 contrib_attack = int(((len(fight_list) / total_size) * pray_score + len(fight_list) * 2) * (1 + (glyphs_bonus / 100)))
                 contrib_diplomacy = int(((len(talk_list) / total_size) * pray_score + len(talk_list) * 2) * (1 + (glyphs_bonus / 100)))
                 contrib_magic = int(((len(magic_list) / total_size) * pray_score + len(magic_list) * 2) * (1 + (glyphs_bonus / 100)))
