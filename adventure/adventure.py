@@ -2395,7 +2395,7 @@ class Adventure(BaseCog):
         session.message_id = adventure_msg.id
         start_adding_reactions(adventure_msg, self._adventure_actions if owner_challenge else self._adventure_run, ctx.bot.loop)
 
-        found_msg = await ctx.send(f"Your group encountered a monster!\n"
+        found_msg = await ctx.send(f"Your group encountered **{prefix}{session.attribute} {session.challenge}{plural}**!\n"
             f"What will you do and will any other heroes help your cause?\n"
             f"Heroes have {timeout}s to change their strategy or join the fight via reactions above!")
         timer = await self._adv_countdown(ctx, session.timer, "Time remaining: ")
@@ -2881,22 +2881,59 @@ class Adventure(BaseCog):
                 pass
             await self.config.user(user).set(c._to_json())
 
+    async def _class_bonus(self, class_name, user_list, stat_checks):
+        ability_triggered = False
+        bonus_stat = 0
+        bonus = 0
+        bonus_user = None
+        for user in user_list:
+            if ability_triggered:
+                break
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
+            if c.heroclass["name"] == class_name:
+                for stat in stat_checks:
+                    bonus_stat += getattr(c, stat) + c.skill[stat]
+                bonus_stat = int(bonus_stat / len(stat_checks))
+                chance = min(int(bonus_stat / 2.5 + 1), c.lvl)
+                roll = random.randint(1, 100)
+                if roll in range (1, chance):
+                    ability_triggered = True
+                    bonus = int(chance * 0.4) + 3
+                    bonus_user = user
+        return bonus, bonus_user
+
+    async def _cleric_bonus(self, session):
+        aura = False
+        bless_bonus = 0
+        aura_chance = 0
+        blessed_user = None
+        for user in session.pray: #check if a cleric is praying and calculate the possible bonus
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
+            bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
+            if c.heroclass["name"] == "Cleric" and not aura:
+                chance = min(int(bonus_cleric / 1.5 + 1), c.lvl * 2)
+                aura_roll = random.randint(1, 100)
+                if aura_roll in range (1, chance):
+                    aura = True
+                    aura_chance = chance
+                    blessed_user = user
+            if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]:
+                bless_base = max(10, int((10 + bonus_cleric) * 0.5))
+                bless_bonus += max(1, int(bless_base / len(session.fight + session.magic + session.talk)))
+        return aura_chance, bless_bonus, blessed_user
+
     async def handle_fight(self, guild_id, fumblelist, critlist, attack, magic, challenge):
         session = self._sessions[guild_id]
         pdef = self.MONSTERS[challenge]["pdef"]
         mdef = self.MONSTERS[challenge]["mdef"]
-        sharpen = False #Tinkerer bonus can only be triggered once if sharpen is false
-        sharpen_bonus = 0 #Tinkerer bonus initialized to 0
-        potion = False #Tinkerer bonus can only be triggered once if potion is false
-        potion_bonus = 0 #Tinkerer bonus initialized to 0
-        melody = False #Bard bonus can only be triggered once if melody is false
-        melody_bonus = 0 #Bard bonus initialized to 0
-        aura = False #Cleric bonus can only be triggered once if aura is false
-        aura_bonus = 0 #Cleric bonus initialized to 0
-        aura_chance = 0 #Clerci chance initialized to 0
-        bless_bonus = 0 # Cleric active bonus initialized to 0
-        incision = False #Bard bonus can only be triggered once if incision is false
-        incision_bonus = 0 #Bard bonus initialized to 1
         # make sure we pass this check first
         if len(session.fight + session.magic) >= 1:
             msg = ""
@@ -2932,65 +2969,23 @@ class Adventure(BaseCog):
         else:
             return (fumblelist, critlist, attack, magic, "")
 
-        for user in session.fight: #check if a tinkerer is in the fight party and calculate the possible bonus
-            try:
-                c = await Character._from_json(self.config, user)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                continue
-            if c.heroclass["name"] == "Tinkerer" and not sharpen:
-                bonus_tinkerer = c.att + c.skill["att"]
-                sharpen_chance = min(int(bonus_tinkerer / 2.5 + 1), c.lvl)
-                sharpen_roll = random.randint(1, 100)
-                if sharpen_roll in range (1, sharpen_chance):
-                    sharpen = True
-                    sharpen_bonus = int(sharpen_chance * 0.4) + 3
-                    msg += f"{bold(self.E(user.display_name))} sharpened the weapons of the party! *[🗡 +{sharpen_bonus}%]*\n"
-            if c.heroclass["name"] == "Bard" and not incision:
-                bonus_bard = int((c.att + c.skill["att"] + c.cha + c.skill["cha"]) / 2)
-                incision_chance = min(int(bonus_bard / 2.5 + 1), c.lvl)
-                incision_roll = random.randint(1, 100)
-                if incision_roll in range (1, incision_chance):
-                    incision = True
-                    incision_bonus = int(incision_chance * 0.4) + 3
-                    msg += (
-                        f"{bold(self.E(user.display_name))} strikes precise incisions with his dagger! "
-                        f"*[-{incision_bonus}% to physical resistance]*\n"
-                    )
-        for user in session.magic: #check if a tinkerer is in the magic party and calculate the possible bonus
-            try:
-                c = await Character._from_json(self.config, user)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                continue
-            bonus_tinkerer = c.int + c.skill["int"]
-            if c.heroclass["name"] == "Tinkerer" and not potion:
-                potion_chance = min(int(bonus_tinkerer / 2.5 + 1), c.lvl)
-                potion_roll = random.randint(1, 100)
-                if potion_roll in range (1, potion_chance):
-                    potion = True
-                    potion_bonus = int(potion_chance * 0.4) + 3
-                    msg += f"{bold(self.E(user.display_name))} crafted mana potion for the party! *[🌟 +{potion_bonus}%]*\n"
-        for user in session.pray: #check if a cleric is praying and calculate the possible bonus
-            try:
-                c = await Character._from_json(self.config, user)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                continue
-            bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
-            if c.heroclass["name"] == "Cleric" and not aura:
-                aura_chance = min(int(bonus_cleric / 1.5 + 1), c.lvl * 2)
-                aura_roll = random.randint(1, 100)
-                if aura_roll in range (1, aura_chance):
-                    aura = True
-                    aura_bonus = int(aura_chance * 0.2)
-                    msg += (
-                        f"A holy aura starts surrounding {bold(self.E(user.display_name))} while praying! "
-                        f"*[🗡/🌟 critical chance +{aura_chance}% and 🗯️/⚡️ +{aura_chance}]*\n"
-                    )
-            if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]:
-                bless_base = max(10, int((10 + bonus_cleric) * 0.5))
-                bless_bonus += max(1, int(bless_base / len(session.fight + session.magic + session.talk)))
+        sharpen_bonus, sharpen_user = await self._class_bonus("Tinkerer", session.fight, ["att"])
+        if sharpen_bonus > 0:
+            msg += f"{bold(self.E(sharpen_user.display_name))} sharpened the weapons of the party! *[🗡 +{sharpen_bonus}%]*\n"
+        incision_bonus, incision_user = await self._class_bonus("Bard", session.fight, ["att", "cha"])
+        if incision_bonus > 0:
+            msg += f"{bold(self.E(incision_user.display_name))} strikes precise incisions with his dagger! *[-{incision_bonus}% to 🗡 resistance]*\n"
+        potion_bonus, potion_user = await self._class_bonus("Tinkerer", session.magic, ["int"])
+        if potion_bonus > 0:
+            msg += f"{bold(self.E(potion_user.display_name))} crafted mana potion for the party! *[🌟 +{potion_bonus}%]*\n"
+        melody_bonus, melody_user = await self._class_bonus("Bard", session.magic, ["int", "cha"])
+        if melody_bonus > 0:
+            msg += f"{bold(self.E(melody_user.display_name))} whispered a dissonant melody to the enemy, wracking it with terrible pain! *[-{melody_bonus}% to 🌟 resistance]*\n"
+        aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
+        if aura_chance > 0:
+            msg += f"A holy aura starts surrounding {bold(self.E(blessed_user.display_name))} while praying! *[+{aura_chance}% to 🗡/🌟 critical chance and 🗯️/⚡️ dmg]*\n"
+        aura_bonus = int(aura_chance * 0.2)
+
         for user in session.fight:
             roll = random.randint(1, 20)
             crit_roll = min(random.randint(1, 20) + aura_bonus, 20)
@@ -3040,23 +3035,7 @@ class Adventure(BaseCog):
                 report += (
                     f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🗡{str(att_value)} did **🗡{hero_dmg} dmg** | "
                 )
-        for user in session.magic: #check if a bard is in the magic party and calculate the possible bonus
-            try:
-                c = await Character._from_json(self.config, user)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                continue
-            bonus_bard = int((c.int + c.skill["int"] + c.cha + c.skill["cha"]) / 2)
-            if c.heroclass["name"] == "Bard" and not melody:
-                melody_chance = min(int(bonus_bard / 2.5 + 1), c.lvl)
-                melody_roll = random.randint(1, 100)
-                if melody_roll in range (1, melody_chance):
-                    melody = True
-                    melody_bonus = int(melody_chance * 0.4) + 3
-                    msg += (
-                        f"{bold(self.E(user.display_name))} whispered a dissonant melody to the enemy, "
-                        f"wracking it with terrible pain! *[-{melody_bonus}% to magic resistance]*\n"
-                    )
+
         for user in session.magic:
             roll = random.randint(1, 20)
             crit_roll = min(random.randint(1, 20) + aura_bonus, 20)
@@ -3106,12 +3085,15 @@ class Adventure(BaseCog):
                 report += (
                     f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)} did **🌟{hero_dmg} dmg** | "
                 )
-        msg = msg + report + "\n"
+        
         for user in fumblelist:
             if user in session.fight:
                 session.fight.remove(user)
             elif user in session.magic:
                 session.magic.remove(user)
+        if report == "Attack Party: ":
+            report = ""  # if everyone fumbles
+        msg = msg + report + "\n"
         return (fumblelist, critlist, attack, magic, msg)
 
     async def handle_pray(self, guild_id, fumblelist, attack, diplomacy, magic):
@@ -3219,19 +3201,11 @@ class Adventure(BaseCog):
             msg = ""
         else:
             return (fumblelist, critlist, diplomacy, "")
-        fury = False
-        fury_bonus = 0
-        bless_bonus = 0
-        for user in session.pray: #check if a cleric is praying and calculate the possible bonus
-            try:
-                c = await Character._from_json(self.config, user)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                continue
-            bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
-            if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]:
-                bless_base = max(10, int((10 + bonus_cleric) * 0.5))
-                bless_bonus += max(1, int(bless_base / len(session.fight + session.magic + session.talk)))
+        fury_bonus = await self._class_bonus("Berserker", session.fight, ["cha"])
+        if fury_bonus > 0:
+            msg += f"{bold(self.E(user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"
+        aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
+
         for user in session.talk:
             try:
                 c = await Character._from_json(self.config, user)
@@ -3239,15 +3213,7 @@ class Adventure(BaseCog):
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
             roll = random.randint(1, 20)
-            dipl_value = c.cha + c.skill["cha"]
-            if c.heroclass["name"] == "Berserker" and not fury:
-                dipl_value = (c.att + c.skill["att"] + c.cha + c.skill["cha"])/2
-                fury_chance = min(int(dipl_value / 2.5 + 1), c.level)
-                fury_roll = random.randint(1, 100)
-                if fury_roll in range(1, fury_chance):
-                    fury = True
-                    fury_bonus = max(int(fury_chance / 10 * 4), 2)
-                    msg += f"{bold(self.E(user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"          
+            dipl_value = c.cha + c.skill["cha"]     
             if roll == 1:
                 msg += f"{bold(self.E(user.display_name))} accidentally offended the enemy.\n"
                 fumblelist.append(user)
@@ -3256,7 +3222,7 @@ class Adventure(BaseCog):
                     bonus_roll = random.randint(5, 15)
                     bonus_multi = random.choice([0.2, 0.3, 0.4, 0.5])
                     bonus = max(bonus_roll, int((roll + dipl_value) * bonus_multi))
-                    hero_talk = roll - bonus + dipl_value + bless_bonus
+                    hero_talk = int((roll - bonus + dipl_value + bless_bonus) * (1 + (fury_bonus / 100)))
                     diplomacy += hero_talk
                     bonus = ability + str(bonus)
                     report += (
@@ -3273,7 +3239,7 @@ class Adventure(BaseCog):
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = 0.5 if (c.heroclass["name"] == "Bard" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
                 bonus = max(bonus_roll, int((roll + dipl_value) * bonus_multi))
-                hero_talk = roll + bonus + dipl_value + bless_bonus
+                hero_talk = int((roll + bonus + dipl_value + bless_bonus) * (1 + (fury_bonus / 100)))
                 diplomacy += hero_talk
                 bonus = ability + str(bonus)
                 report += (
@@ -3281,16 +3247,18 @@ class Adventure(BaseCog):
                     f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
                 )
             else:
-                hero_talk = roll + dipl_value + bless_bonus
+                hero_talk = int((roll + dipl_value + bless_bonus) * (1 + (fury_bonus / 100)))
                 diplomacy += hero_talk
                 report += (
                     f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
                 )
-        diplomacy = int(diplomacy * (1 + (fury_bonus / 100)))
-        msg = msg + report + "\n"
+        
         for user in fumblelist:
             if user in session.talk:
                 session.talk.remove(user)
+        if report == "Talking Party: ":
+            report = ""  # if everyone fumbles
+        msg = msg + report + "\n"
         return (fumblelist, critlist, diplomacy, msg)
 
     async def handle_basilisk(self, ctx, failed):
