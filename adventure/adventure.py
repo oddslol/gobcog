@@ -1549,9 +1549,8 @@ class Adventure(BaseCog):
 
     @commands.command()
     @commands.cooldown(rate=1, per=4, type=commands.BucketType.user)
-    async def loot(self, ctx, box_type: str = None):
+    async def loot(self, ctx: Context, box_type: str = None, amount: int = 1):
         """This opens one of your precious treasure chests.
-
         Use the box rarity type with the command: normal, rare, epic or legendary.
         """
         if not await self.allow_in_dm(ctx):
@@ -1567,7 +1566,7 @@ class Adventure(BaseCog):
                     (
                         f"{self.E(ctx.author.display_name)} owns {str(c.treasure[0])} "
                         f"normal, {str(c.treasure[1])} rare, {str(c.treasure[2])} epic "
-                        f"and {str(c.treasure[3])} legendary chests."                
+                        f"and {str(c.treasure[3])} legendary chests."
                     ),
                     lang="css",
                 )
@@ -1585,15 +1584,38 @@ class Adventure(BaseCog):
                 f"There is talk of a {box_type} treasure chest but nobody ever saw one."
             )
         treasure = c.treasure[redux.index(1)]
-        if treasure == 0:
+        if treasure < amount:
             await ctx.send(
                 f"{self.E(ctx.author.display_name)}, "
-                f"you have no {box_type} treasure chest to open."
+                f"you do not have enough {box_type} treasure chest to open."
             )
         else:
-            c.treasure[redux.index(1)] -= 1
+            c.treasure[redux.index(1)] -= amount
             await self.config.user(ctx.author).set(c._to_json())
-            await self._open_chest(ctx, ctx.author, box_type)  # returns item and msg
+            if amount > 1:
+                items = await self._open_chests(ctx, ctx.author, box_type, amount)
+                adjust = max([len(str(i)) for i in items])
+                title_str = f" # - Name "
+                buffer = f"-"
+                msg = (
+                    f"{self.E(ctx.author.display_name)}, "
+                    f"you've opened the following items:\n"
+                    f"{title_str} {buffer:>{adjust-4}} ( ATT  |  INT  |  CHA  )"
+                )
+                for item in items:
+                    att_space = " " if len(str(item.att)) == 1 else ""
+                    cha_space = " " if len(str(item.cha)) == 1 else ""
+                    int_space = " " if len(str(item.int)) == 1 else ""
+                    msg += (
+                        f"\n {item.owned} - {str(item):<{adjust}} - "
+                        f"( {item.att}{att_space}   | "
+                        f" {item.int}{int_space}   | "
+                        f" {item.cha}{cha_space}   )"
+                    )
+                for page in pagify(msg):
+                    await ctx.send(box(page, lang="css"))
+            else:
+                await self._open_chest(ctx, ctx.author, box_type)  # returns item and msg
 
     @commands.command()
     @commands.guild_only()
@@ -2331,26 +2353,6 @@ class Adventure(BaseCog):
         participants = self._sessions[ctx.guild.id].participants
         return (rewards, participants)
 
-    async def _plural(self, challenge, amount):
-        challenge_updt = challenge
-        if amount > 1:
-            plural = "s"
-            if "Wolf" in challenge_updt:
-                challenge_updt.replace("Wolf", "Wolve")
-            if "Phoenix" in challenge_updt or "Matriarch" in challenge_updt or "Witch" in challenge_updt:
-                plural = "es"
-            if "Succubus" in challenge_updt or "Incubus" in challenge_updt:
-                challenge_updt.replace("cubus", "cubi")
-                plural = ""
-            if "Wolves" in challenge_updt or "Cats" in challenge_updt:
-                challenge_updt.replace("Pack", "Packs")
-                plural = ""
-            if "Thief" in challenge_updt:
-                challenge_updt.replace("Thief", "Thieve")
-        else:
-            plural = ""
-        return challenge_updt, plural
-
     async def _choice(self, ctx, adventure_txt, adventure_msg):
         session = self._sessions[ctx.guild.id]
         if session.attribute[1] in ['a', 'e', 'i', 'o', 'u']:
@@ -2430,6 +2432,26 @@ class Adventure(BaseCog):
         
         await found_msg.delete()
         return await self._result(ctx, adventure_msg)
+
+    async def _plural(self, challenge, amount):
+        challenge_updt = challenge
+        if amount > 1:
+            plural = "s"
+            if "Wolf" in challenge_updt:
+                challenge_updt.replace("Wolf", "Wolve")
+            if "Phoenix" in challenge_updt or "Matriarch" in challenge_updt or "Witch" in challenge_updt:
+                plural = "es"
+            if "Succubus" in challenge_updt or "Incubus" in challenge_updt:
+                challenge_updt.replace("cubus", "cubi")
+                plural = ""
+            if "Wolves" in challenge_updt or "Cats" in challenge_updt:
+                challenge_updt.replace("Pack", "Packs")
+                plural = ""
+            if "Thief" in challenge_updt:
+                challenge_updt.replace("Thief", "Thieve")
+        else:
+            plural = ""
+        return challenge_updt, plural
 
     async def on_reaction_add(self, reaction, user):
         """This will be a cog level reaction_add listener for game logic"""
@@ -2597,8 +2619,8 @@ class Adventure(BaseCog):
         persuaded = diplomacy >= dipl
         damage_str = ""
         diplo_str = ""
-        challenge, plural = await self._plural(challenge, session.amount)
         challenge_amount = "" if session.amount == 1 else f"{session.amount} "
+        challenge, plural = await self._plural(challenge, session.amount)
         if attack or magic:
             damage_str = (
                 f"The group {'hit the' if not slain else 'killed the'} {challenge_amount}{challenge}{plural} "
@@ -2898,7 +2920,6 @@ class Adventure(BaseCog):
                 pass
             await self.config.user(user).set(c._to_json())
 
-
     async def _class_bonus(self, class_name, user_list, stat_checks):
         ability_triggered = False
         bonus_stat = 0
@@ -3138,8 +3159,6 @@ class Adventure(BaseCog):
         if await self.config.guild(self.bot.get_guild(guild_id)).god_name():
             god = await self.config.guild(self.bot.get_guild(guild_id)).god_name()
         
-        glyphs = False
-        glyphs_bonus = 0
         total_size = len(fight_list + talk_list + magic_list)
         if total_size == 0:
             pray_list_name = []
@@ -3148,20 +3167,10 @@ class Adventure(BaseCog):
             attrib = f"a madman" if len(pray_list_name) == 1 else f"madmen"
             msg += f"{bold(humanize_list(pray_list_name))} blessed like {attrib} but nobody was there to receive it.\n"
             return (fumblelist, attack, diplomacy, magic, msg)
-        for user in magic_list:
-            try:
-                c = await Character._from_json(self.config, user)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                continue
-            if c.heroclass["name"] == "Wizard" and not glyphs:
-                glyphs_power = (c.int + c.skill["int"] + c.cha + c.skill["cha"]) / 2
-                glyphs_chance = min(int(glyphs_power / 2.5 + 1), c.lvl)
-                glyphs_roll = random.randint(1, 100)
-                if glyphs_roll in range(1, glyphs_chance):
-                    glyphs = True
-                    glyphs_bonus = int(glyphs_chance * 0.4) + 3
-                    msg += f"{bold(self.E(user.display_name))}'s magic glyphs start glowing, amplifying all prayers! *[🛐 +{glyphs_bonus}%]*\n"
+        
+        glyphs_bonus, glyphs_user = await self._class_bonus("Wizard", session.magic, ["int"])
+        if glyphs_bonus > 0:
+            msg += f"{bold(self.E(glyphs_user.display_name))}'s magic glyphs start glowing, amplifying all prayers! *[🛐 +{glyphs_bonus}%]*\n"
         for user in pray_list:
             try:
                 c = await Character._from_json(self.config, user)
@@ -3226,9 +3235,9 @@ class Adventure(BaseCog):
             msg = ""
         else:
             return (fumblelist, critlist, diplomacy, "")
-        fury_bonus = await self._class_bonus("Berserker", session.fight, ["cha"])
+        fury_bonus, fury_user = await self._class_bonus("Berserker", session.fight, ["cha"])
         if fury_bonus > 0:
-            msg += f"{bold(self.E(user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"
+            msg += f"{bold(self.E(fury_user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"
         aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
 
         for user in session.talk:
@@ -3438,25 +3447,8 @@ class Adventure(BaseCog):
                 ctx = await self.bot.get_context(message)
                 await self._trader(ctx)
 
-    async def _open_chest(self, ctx, user, chest_type):
-        if hasattr(user, "display_name"):
-            chest_msg = (
-                f"{self.E(user.display_name)} is opening a treasure chest. What riches lay inside?"
-            )
-        else:
-            chest_msg = (
-                f"{self.E(ctx.author.display_name)}'s {user[:1] + user[1:]} is "
-                "foraging for treasure. What will it find?"
-            )
-        try:
-            c = await Character._from_json(self.config, ctx.author)
-        except Exception:
-            log.error("Error with the new character sheet", exc_info=True)
-            return
-        open_msg = await ctx.send(box(chest_msg, lang="css"))
-        await asyncio.sleep(2)
+    async def _roll_chest(self, chest_type: str, open_msg: discord.Message = None):
         roll = random.randint(1, 500)
-
         if chest_type.lower() in "pet":
             if roll == 1:
                 chance = self.TR_LEGENDARY
@@ -3507,7 +3499,45 @@ class Adventure(BaseCog):
         else:
             chance = self.TR_COMMON
         itemname = random.choice(list(chance.keys()))
-        item = Item._from_json({itemname: chance[itemname]})
+        return Item._from_json({itemname: chance[itemname]})
+
+    async def _open_chests(self, ctx: Context, user: discord.Member, chest_type: str, amount: int):
+        """This allows you you to open multiple chests at once and put them in your inventory"""
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        await asyncio.sleep(2)
+        items = [await self._roll_chest(chest_type) for i in range(1, amount+1)]
+
+        for item in items:
+            if item.name in c.backpack:
+                c.backpack[item.name].owned += 1
+            else:
+                c.backpack[item.name] = item
+        await self.config.user(ctx.author).set(c._to_json())
+        return items
+
+    async def _open_chest(self, ctx, user, chest_type):
+        if hasattr(user, "display_name"):
+            chest_msg = (
+                f"{self.E(user.display_name)} is opening a treasure chest. What riches lay inside?"
+            )
+        else:
+            chest_msg = (
+                f"{self.E(ctx.author.display_name)}'s {user[:1] + user[1:]} is "
+                "foraging for treasure. What will it find?"
+            )
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        open_msg = await ctx.send(box(chest_msg, lang="css"))
+        await asyncio.sleep(2)
+
+        item = await self._roll_chest(chest_type, open_msg)
         slot = item.slot[0]
         if len(item.slot) > 1:
             slot = "two handed"
