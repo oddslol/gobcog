@@ -7,7 +7,7 @@
     " hideous": [1, 1],
     " disgusting": [1, 0.7],
     " plagued": [1.2, 0.9],
-    "n ordinary": [1, 1],
+    " ordinary": [1, 1],
     " miniscule": [0.2, 1.1],
     " weary": [0.6, 0.9],
     " tiny": [0.7, 1],
@@ -27,8 +27,8 @@
     " muscle-bound": [1.2, 0.7],
     " fairly intelligent": [1, 1.2],
     " dumb": [1, 0.8],
-    "n old": [0.8, 1.5],
-    "n ancient": [0.8, 2],
+    " old": [0.8, 1.5],
+    " ancient": [0.8, 2],
     " savage": [1.8, 0.9],
-    "n absolutely brutal-looking": [1.9, 1.1]
+    " absolutely brutal-looking": [1.9, 1.1]
 }
