@@ -184,6 +184,7 @@ class Adventure(BaseCog):
         """This shows the contents of your backpack.
 
         Selling: `[p]backpack sell item_name`
+                 `[p]backpack sellrarity rarity_type
         Trading: `[p]backpack trade @user price item_name`
         Equip:   `[p]backpack equip item_name`
         or respond with the item name to the backpack command output.
@@ -309,8 +310,9 @@ class Adventure(BaseCog):
             )
             return
         lookup = list(i for x, i in c.backpack.items() if item.lower() in x.lower())
-        if any([x for x in lookup if x.rarity == "forged"]):
-            device = lookup[0]
+        forged = [x for x in lookup if x.rarity == "forged"]
+        if any(forged):
+            device = forged[0]
             return await ctx.send(
                 box(
                     (
@@ -319,13 +321,47 @@ class Adventure(BaseCog):
                     ),
                     lang="css",
                 )
+            )    
+        await self._sell_items(ctx, lookup, c)
+        
+    @_backpack.command(name="sellrarity")
+    async def backpack_sellrarity(self, ctx, *, rarity: str):
+        if rarity.lower() not in ["normal", "rare", "epic", "legendary"]:
+            return await ctx.send(
+                box(
+                    (
+                        f"{self.E(ctx.author.display_name)}, {rarity} is not a valid loot type"
+                        f"(normal, rare, epic, legendary)\n"
+                    ),
+                    lang="css",
+                )
             )
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+
+        item_list = list(i for x, i in c.backpack.items() if rarity.lower() in i.rarity)
+        if not any(item_list):
+            await ctx.send(
+                box(
+                    (
+                        f"{self.E(ctx.author.display_name)}, you do not have "
+                        f"any items of that rarity to sell."
+                    ),
+                    lang="css",
+                )
+            )
+            return
+        await self._sell_items(ctx, item_list, c)
+        
+    async def _sell_items(self, ctx, lookup: list, c: Character):
         item_str = box(humanize_list([f"{str(y)} - {y.owned}" for y in lookup]), lang="css")
         start_msg = await ctx.send(
             f"{self.E(ctx.author.display_name)}, do you want to sell these items? {item_str}"
         )
         currency_name = await bank.get_currency_name(ctx.guild)
-
         emojis = [
             "\N{DIGIT ONE}\N{COMBINING ENCLOSING KEYCAP}",
             "\N{CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS}",
@@ -342,45 +378,51 @@ class Adventure(BaseCog):
         msg = ""
         if pred.result == 0:  # user reacted with one to sell.
             # sell one of the item
-            price = 0
+            total = 0
             for item in lookup:
                 item.owned -= 1
-                price += await self._sell(ctx.author, item)
+                item_price = await self._sell(ctx.author, item)
+                total += item_price
                 msg += (
                     f"{self.E(ctx.author.display_name)} sold their "
-                    f"{box(item, lang='css')} for {price} {currency_name}.\n"
+                    f"{str(item)} for {item_price} {currency_name}.\n"
                 )
                 if item.owned <= 0:
                     del c.backpack[item.name]
-            await bank.deposit_credits(ctx.author, price)
+            await bank.deposit_credits(ctx.author, total)
         if pred.result == 1:  # user wants to sell all owned.
-            price = 0
+            total = 0
             for item in lookup:
+                item_total = 0
                 for x in range(0, item.owned):
                     item.owned -= 1
-                    price += await self._sell(ctx.author, item)
+                    item_price = await self._sell(ctx.author, item)
+                    item_total += item_price
                     if item.owned <= 0:
                         del c.backpack[item.name]
                 msg += (
                     f"{self.E(ctx.author.display_name)} sold all their "
-                    f"{box(item, lang='css')} for {price} {currency_name}.\n"
+                    f"{str(item)} for {item_total} {currency_name}.\n"
                 )
-            await bank.deposit_credits(ctx.author, price)
+                total += item_total
+            await bank.deposit_credits(ctx.author, total)
         if pred.result == 2:  # user wants to sell all but one.
-            price = 0
+            total = 0
             for item in lookup:
+                item_total = 0
                 for x in range(1, item.owned):
                     item.owned -= 1
-                    price += await self._sell(ctx.author, item)
-                if price != 0:
+                    item_price = await self._sell(ctx.author, item)
+                    item_total += item_price
+                if item_total != 0:
                     msg += (
-                        f"{self.E(ctx.author.display_name)} sold all their "
-                        f"{box(item, lang='css')} for {price} {currency_name}.\n"
+                        f"{self.E(ctx.author.display_name)} sold all but one of their "
+                        f"{str(item)} for {item_total} {currency_name}.\n"
                     )
-            await bank.deposit_credits(ctx.author, price)
+                total += item_total
+            await bank.deposit_credits(ctx.author, total)
         if pred.result == 3:  # user doesn't want to sell those items.
             msg = "Not selling those items."
-
         if msg:
             await self.config.user(ctx.author).set(c._to_json())
             for page in pagify(msg, delims=["\n"]):
@@ -3452,47 +3494,41 @@ class Adventure(BaseCog):
                 ctx = await self.bot.get_context(message)
                 await self._trader(ctx)
 
-    async def _roll_chest(self, chest_type: str, open_msg: discord.Message = None):
+    async def _roll_chest(self, chest_type: str):
         roll = random.randint(1, 500)
         if chest_type.lower() in "pet":
             if roll == 1:
                 chance = self.TR_LEGENDARY
             elif roll <= 25:
                 chance = self.TR_EPIC
-            elif roll > 25 and roll <= 125:
+            elif roll <= 125:
                 chance = self.TR_RARE
-            elif roll > 125 and roll <= 375:
+            elif roll <= 375:
                 chance = self.TR_COMMON
             else:
-                await open_msg.edit(
-                    content=box(
-                        f"{chest_msg}\nThe {user[:1] + user[1:]} found nothing of value.",
-                        lang="css",
-                    )
-                )
                 return None
         if chest_type.lower() in "normal":
-            if roll == 2:
+            if roll == 1:
                 chance = self.TR_LEGENDARY
-            elif roll <= 25:
+            elif roll <= 5:
                 chance = self.TR_EPIC
-            elif roll > 25 and roll <= 125:
+            elif roll <= 25:
                 chance = self.TR_RARE
             else:
                 chance = self.TR_COMMON
         elif chest_type.lower() in "rare":
-            if roll <= 10:
+            if roll <= 6:
                 chance = self.TR_LEGENDARY
-            elif roll <= 75:
+            elif roll <= 30:
                 chance = self.TR_EPIC
-            elif roll > 75 and roll <= 225:
+            elif roll <= 150:
                 chance = self.TR_RARE
             else:
                 chance = self.TR_COMMON
         elif chest_type.lower() in "epic":
-            if roll <= 25:
+            if roll <= 30:
                 chance = self.TR_LEGENDARY
-            elif roll <= 175:
+            elif roll <= 150:
                 chance = self.TR_EPIC
             else:
                 chance = self.TR_RARE
@@ -3542,7 +3578,15 @@ class Adventure(BaseCog):
         open_msg = await ctx.send(box(chest_msg, lang="css"))
         await asyncio.sleep(2)
 
-        item = await self._roll_chest(chest_type, open_msg)
+        item = await self._roll_chest(chest_type)
+        if chest_type == "pet" and not item:
+            await open_msg.edit(
+                    content=box(
+                        f"{chest_msg}\nThe {user[:1] + user[1:]} found nothing of value.",
+                        lang="css",
+                    )
+                )
+            return None
         slot = item.slot[0]
         if len(item.slot) > 1:
             slot = "two handed"
