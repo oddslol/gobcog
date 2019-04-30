@@ -2484,17 +2484,17 @@ class Adventure(BaseCog):
         if amount > 1:
             plural = "s"
             if "Wolf" in challenge_updt:
-                challenge_updt.replace("Wolf", "Wolve")
+                challenge_updt = challenge_updt.replace("Wolf", "Wolve")
             if "Phoenix" in challenge_updt or "Matriarch" in challenge_updt or "Witch" in challenge_updt:
                 plural = "es"
             if "Succubus" in challenge_updt or "Incubus" in challenge_updt:
-                challenge_updt.replace("cubus", "cubi")
+                challenge_updt = challenge_updt.replace("cubus", "cubi")
                 plural = ""
             if "Wolves" in challenge_updt or "Cats" in challenge_updt:
-                challenge_updt.replace("Pack", "Packs")
+                challenge_updt = challenge_updt.replace("Pack", "Packs")
                 plural = ""
             if "Thief" in challenge_updt:
-                challenge_updt.replace("Thief", "Thieve")
+                challenge_updt = challenge_updt.replace("Thief", "Thieve")
         else:
             plural = ""
         return challenge_updt, plural
