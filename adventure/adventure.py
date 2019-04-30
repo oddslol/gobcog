@@ -2232,17 +2232,15 @@ class Adventure(BaseCog):
         if not challenge:
             try:
                 group, group_msg = await self._group(ctx, challenge)
-                total_att = 0
-                total_int = 0
+                total_dmg = 0
                 total_cha = 0
                 for user_list in group.fight, group.magic, group.talk, group.pray:
                     for user in user_list:
                         c = await Character._from_json(self.config, user)
-                        total_att += c.att + c.skill['att'] + 10  # assume average rolls
-                        total_int += c.int + c.skill['int'] + 10 
+                        total_dmg += max(c.att + c.skill['att'], c.int + c.skill['int']) + 10  # assume average rolls
                         total_cha += c.cha + c.skill['cha'] + 10
-                log.debug("passing through total_att: " + str(total_att) + ", total_int: " + str(total_int) + ", total_cha: " + str(total_cha))
-                challenge, amount = await self._find_challenge(total_att, total_int, total_cha)
+                log.debug("passing through total_dmg: " + str(total_dmg) + ", total_cha: " + str(total_cha))
+                challenge, amount = await self._find_challenge(total_dmg, total_cha)
             except Exception:
                 log.error("Something went wrong forming the group", exc_info=True)
                 return
@@ -2280,14 +2278,14 @@ class Adventure(BaseCog):
         if group:
             del self._groups[ctx.guild.id]
 
-    async def _find_challenge(self, att, magic, dipl):
+    async def _find_challenge(self, dmg, dipl):
         challenges = list(self.MONSTERS.keys())
         random.shuffle(challenges)  # if we take the list and shuffle it... we can iterate through it rather than rely on random.choice
         i = 0
         challenge = challenges[i]
         boss_roll = random.randint(1, 10)
-        strongest_stat = max(att, magic, dipl)
-        hp_dipl = "hp" if strongest_stat == att or magic else "dipl"
+        strongest_stat = max(dmg, dipl)
+        hp_dipl = "hp" if strongest_stat == dmg else "dipl"
         if boss_roll == 10:
              while not self.MONSTERS[challenge]["boss"] and i < len(challenges):
                 i += 1
