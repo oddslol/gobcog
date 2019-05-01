@@ -84,7 +84,7 @@ class Adventure(BaseCog):
                 "backpack": {},
             },
             "loadouts": {},
-            "class": {
+            "heroclass": {
                 "name": "Hero",
                 "ability": False,
                 "desc": "Your basic adventuring hero.",
@@ -201,13 +201,7 @@ class Adventure(BaseCog):
         if not await self.allow_in_dm(ctx):
             return await ctx.send("This command is not available in DM's on this bot.")
         if not ctx.invoked_subcommand:
-            msg = f"{bold(self.E(ctx.author.display_name))}, these are all your heroes:"
-            embed = discord.Embed(colour=discord.Colour.blurple())
-            embed.description = msg
-            use_embeds = (
-                await self.config.guild(ctx.guild).embed()
-                and ctx.channel.permissions_for(ctx.me).embed_links
-            )
+            msg = f"{self.E(ctx.author.display_name)}, these are all your heroes:"
             raw = await self.config.user(ctx.author).get_raw()
             # Heroes aren't setup yet but they will be as soon as they do literally anything, no need for custom msg
             if "active" not in raw.keys():  
@@ -221,22 +215,27 @@ class Adventure(BaseCog):
             # To be improved down the line with stats of current heroes?
             current_hero = ""
             count = 0
+            max_length = 0
             for hero_name, hero_charsheet in raw.items():
+                if len(hero_name) >= max_length:
+                    max_length = len(hero_name)
                 if hero_name.lower() in "active":
                     current_hero = hero_charsheet["name"]
-            for hero_name in raw.keys():
+            spacer = " "
+            msg += f"\nName {spacer:>{max_length-4}} | Class {spacer:>{3}} | Level"
+            for hero_name, hero_charsheet in raw.items():
                 if hero_name not in "active":
+                    # default used to be "class" instead of heroclass for some reason
+                    heroclass = hero_charsheet["heroclass"]["name"] if "heroclass" in hero_charsheet else hero_charsheet["class"]["name"]
+                    herolvl = hero_charsheet["lvl"]
                     count += 1
-                    msg += f"\n**{hero_name}**"
+                    msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}} | {heroclass}{spacer:>{9-len(heroclass)}} | {herolvl}" 
                     if hero_name == current_hero:
-                        msg+= f"   <---- current hero"
+                        msg+= f"  <---- current"
             if count == 0:
                 return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
-            if use_embeds:
-                embed.description = msg
-                return await ctx.send(embed=embed)
-            else:
-                return await ctx.send(msg)
+            for page in pagify(msg):
+                await ctx.send(box(page, lang="css"))
 
     @_hero.command(name="new")
     async def hero_new(self, ctx, *, name: str = None):
@@ -345,7 +344,7 @@ class Adventure(BaseCog):
     async def hero_change(self, ctx, *, name: str):
         raw = await self.config.user(ctx.author).get_raw()
         name = name.title()
-        if name in "Active":
+        if name in ["Active", raw["active"]["name"]]:
             return await ctx.send(f"{self.E(ctx.author.display_name)}, your current hero ***is*** {name}!")
         if name not in raw.keys():
             return await ctx.send(f"{self.E(ctx.author.display_name)}, you do not have a hero with that name.")
