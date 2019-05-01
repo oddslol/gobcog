@@ -61,7 +61,8 @@ class Adventure(BaseCog):
 
         self.config = Config.get_conf(self, 2710801001, force_registration=True)
 
-        default_user = {
+        self.default_character = {
+            "name": "active",
             "exp": 0,
             "lvl": 1,
             "att": 0,
@@ -91,8 +92,10 @@ class Adventure(BaseCog):
             },
             "skill": {"pool": 0, "att": 0, "cha": 0, "int": 0},
         }
+        
+        default_user = { "active" : self.default_character }
 
-        default_guild = {"cart_channels": [], "god_name": "", "cart_name": "", "embed": True}
+        default_guild = {"cart_channels": [], "god_name": "", "cart_name": "", "embed": True, "hero_cost": 50000}
         default_global = {"god_name": "Herbert", "cart_name": "Hawl's brother", "theme": "default"}
 
         self.RAISINS: list = None
@@ -179,12 +182,152 @@ class Adventure(BaseCog):
         """
         await self._trader(ctx)
 
+    async def _update_hero(self, user: discord.Member, c: Character, hero_name: str = "active"):
+        raw = await self.config.user(user).get_raw()
+        raw[hero_name] = c._to_json()
+        old_char = ["int", "att", "cha", "treasure", "items", "backpack", "loadouts", "heroclass", "skill"]
+        if any(old_char) in raw.keys():
+            for key in old_char:
+                del raw[key]
+        try:
+            return await self.config.user(user).set(raw)
+        except Exception:
+            log.error("Error saving hero details", exc_info=True)
+            return    
+   
+    @commands.group(name="hero", autohelp=False)
+    async def _hero(self, ctx):
+        """This command helps you move between your heroes.
+
+        New hero:     `[p]hero new <name>`
+        Change hero:  `[p]hero change <name>`
+        """
+        if not await self.allow_in_dm(ctx):
+            return await ctx.send("This command is not available in DM's on this bot.")
+        if not ctx.invoked_subcommand:
+            msg = f"{bold(self.E(ctx.author.display_name))}, these are all yours heroes:\n"
+            embed = discord.Embed(colour=discord.Colour.blurple())
+            embed.description = msg
+            use_embeds = (
+                await self.config.guild(ctx.guild).embed()
+                and ctx.channel.permissions_for(ctx.me).embed_links
+            )
+            raw = await self.config.user(ctx.author).get_raw()
+            # Heroes aren't setup yet but they will be as soon as they do literally anything, no need for custom msg
+            if "active" not in raw.keys():  
+                return
+            # To be improved down the line with stats of current heroes?
+            for hero_name, hero_charsheet in raw.items():
+                msg += f"**{hero_name}**\n"
+            if use_embeds:
+                embed.description = msg
+                return await ctx.send(embed=embed)
+            else:
+                return await ctx.send(msg)
+
+    @_hero.command(name="new")
+    async def hero_new(self, ctx, *, name: str):
+        raw = await self.config.user(ctx.author).get_raw()
+        name = name.title()
+        cost = 50000  #default
+        currency_name = await bank.get_currency_name(ctx.author.guild)
+        if await self.config.guild(ctx.guild).hero_cost():
+            cost = await self.config.guild(ctx.guild).hero_cost()
+
+        recruit_msg = (
+                        f"{self.E(ctx.author.display_name)}, it costs {cost} {currency_name} to recruit a new hero to your cause.\n"
+                        f"Do you wish to proceed?\n"
+                    )
+        msg = await ctx.send(recruit_msg)
+        start_adding_reactions(msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+        pred = ReactionPredicate.yes_or_no(msg, ctx.author)
+        try:
+            await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+        except asyncio.TimeoutError:
+            await self._clear_react(msg)
+            return
+        if pred.result:  # user reacted with Yes.
+            try:
+                await bank.withdraw_credits(ctx.author, cost)
+            except ValueError:
+                recruit_msg += f"You cannot afford it, peasant."
+                return await msg.edit(recruit_msg)
+        else:
+            return await msg.delete()
+        if name in raw.keys():
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, you already have a hero with that name.")
+        # all heroes should be active but when first deployed they won't have a name, we need to set it
+        try:
+            if "name" in raw.keys():
+                current_name = raw["name"]
+                character = raw
+            elif "active" in raw.keys():
+                current_name = raw["active"]["name"]
+                character = raw["active"]
+            else:
+                # just in case we get here somehow, make them save their hero with new name
+                current_name = "active"
+                character = raw
+                character["name"] = "active"
+            # default we set for everyone, make them change it so it has a unique name
+            if current_name == "active":
+                await ctx.send(f"{self.E(ctx.author.display_name)}, please enter a name for your current hero:")
+                try:
+                    reply = await ctx.bot.wait_for(
+                        "message", check=MessagePredicate.same_context(ctx), timeout=30
+                    )
+                except asyncio.TimeoutError:
+                    return
+                if not reply:
+                    return
+                else:
+                    # stops current_name = raw["name"] line from returning an actual character
+                    if reply.content.lower() in "name":
+                        return await ctx.send(f"{self.E(ctx.author.display_name)}, you cannot call your hero 'name'.")
+                    current_name = reply.content.title()
+                    character["name"] = current_name
+            await ctx.send(f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.")
+            raw[current_name] = character
+            log.debug("this is in hero new when you save a hero:")
+            log.debug(raw)
+        except Exception:
+            log.error("Error saving old hero details", exc_info=True)
+            return 
+
+        raw[name] = self.default_character
+        raw[name]["name"] = name
+        raw["active"] = raw[name]
+        try:
+            await self.config.user(ctx.author).set(raw)
+        except Exception:
+            log.error("Error creating new hero", exc_info=True)
+            return
+        await ctx.send(f"{self.E(ctx.author.display_name)}, your new hero **{name}** is ready for adventures!")
+
+    @_hero.command(name="change")
+    @commands.cooldown(rate=1, per=30, type=commands.BucketType.user)
+    async def hero_change(self, ctx, *, name: str):
+        raw = await self.config.user(ctx.author).get_raw()
+        name = name.title()
+        if name in "Active":
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, your current hero ***is*** active!")
+        if name not in raw.keys():
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, you do not have a hero with that name.")
+        try:
+            current_name = raw["active"]["name"]
+            raw[current_name] = raw["active"]  # save current hero
+            raw["active"] = raw[name]
+            await self.config.user(ctx.author).set(raw)
+        except Exception:
+            log.error("Error changing hero", exc_info=True)
+            return await ctx.send(f"Sorry about this, {self.E(ctx.author.display_name)}... but we couldn't change your hero.")
+
     @commands.group(name="backpack", autohelp=False)
     async def _backpack(self, ctx):
         """This shows the contents of your backpack.
 
         Selling: `[p]backpack sell item_name`
-                 `[p]backpack sellrarity rarity_type
+                 `[p]backpack sellrarity rarity_type`
         Trading: `[p]backpack trade @user price item_name`
         Equip:   `[p]backpack equip item_name`
         or respond with the item name to the backpack command output.
@@ -244,7 +387,7 @@ class Adventure(BaseCog):
                         )
                     c = await c._equip_item(item, True)
                     # log.info(c)
-                    await self.config.user(ctx.author).set(c._to_json())
+                    await self._update_hero(ctx.author, c)
                     current_stats = box(
                         (
                             f"{self.E(ctx.author.display_name)}'s new stats: "
@@ -287,7 +430,7 @@ class Adventure(BaseCog):
                 )
             await ctx.send(equip_msg)
             c = await c._equip_item(item, True)
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
 
     @_backpack.command(name="sell")
     async def backpack_sell(self, ctx, *, item: str):
@@ -424,7 +567,7 @@ class Adventure(BaseCog):
         if pred.result == 3:  # user doesn't want to sell those items.
             msg = "Not selling those items."
         if msg:
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             for page in pagify(msg, delims=["\n"]):
                 await ctx.send(page)
 
@@ -495,7 +638,7 @@ class Adventure(BaseCog):
                         c.backpack[item.name].owned -= 1
                         if c.backpack[item.name].owned <= 0:
                             del c.backpack[item.name]
-                        await self.config.user(ctx.author).set(c._to_json())
+                        await self._update_hero(ctx.author, c)
                         try:
                             buy_user = await Character._from_json(self.config, buyer)
                         except Exception:
@@ -562,7 +705,7 @@ class Adventure(BaseCog):
                     f"{self.E(ctx.author.display_name)}, ability already in use."
                 )
             c.heroclass["ability"] = True
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(
                 f"📜 {bold(self.E(ctx.author.display_name))} " f"is starting an inspiring sermon. 📜"
             )
@@ -591,7 +734,7 @@ class Adventure(BaseCog):
         else:
             loadout = await Character._save_loadout(c)
             c.loadouts[name] = loadout
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(
                 f"{self.E(ctx.author.display_name)}, your "
                 f"current equipment has been saved to {name}."
@@ -615,7 +758,7 @@ class Adventure(BaseCog):
             return
         else:
             del c.loadouts[name]
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(f"{self.E(ctx.author.display_name)}, loadout {name} has been deleted.")
 
     @loadout.command(name="show")
@@ -727,7 +870,7 @@ class Adventure(BaseCog):
                 lang="css",
             )
             await ctx.send(current_stats)
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
 
     @commands.group()
     @checks.admin_or_permissions(administrator=True)
@@ -741,6 +884,15 @@ class Adventure(BaseCog):
         """[Admin] Set the server's name of the god"""
         await self.config.guild(ctx.guild).god_name.set(name)
         await ctx.tick()
+
+    @adventureset.command()
+    async def heroprice(self, ctx, *, price):
+        """[Admin] Set the price to make new heroes"""
+        try:
+            await self.config.guild(ctx.guild).hero_cost.set(int(price))
+            await ctx.tick()
+        except ValueError:
+            await ctx.cross()
 
     @adventureset.command()
     @checks.is_owner()
@@ -870,7 +1022,7 @@ class Adventure(BaseCog):
                         lang="css",
                     )
                 )
-                await self.config.user(ctx.author).set(c._to_json())
+                await self._update_hero(ctx.author, c)
             else:
                 await ctx.send(
                     f"{self.E(ctx.author.display_name)}, you do not have {(6 * amount)} "
@@ -893,7 +1045,7 @@ class Adventure(BaseCog):
                         lang="css",
                     )
                 )
-                await self.config.user(ctx.author).set(c._to_json())
+                await self._update_hero(ctx.author, c)
             else:
                 await ctx.send(
                     f"{self.E(ctx.author.display_name)}, you do not have {(5 * amount)} "
@@ -916,7 +1068,7 @@ class Adventure(BaseCog):
                         lang="css",
                     )
                 )
-                await self.config.user(ctx.author).set(c._to_json())
+                await self._update_hero(ctx.author, c)
             else:
                 await ctx.send(
                     f"{self.E(ctx.author.display_name)}, you do not have {(4 * amount)} "
@@ -1044,7 +1196,7 @@ class Adventure(BaseCog):
                 c.backpack[x.name].owned -= 1
                 if c.backpack[x.name].owned <= 0:
                     del c.backpack[x.name]
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             # save so the items are eaten up already
             log.debug("tambourine" in c.backpack)
             for items in c.current_equipment():
@@ -1084,7 +1236,7 @@ class Adventure(BaseCog):
                             )
                         )
                     c.backpack[newitem.name] = newitem
-                    await self.config.user(ctx.author).set(c._to_json())
+                    await self._update_hero(ctx.author, c)
                 else:
                     return await ctx.send(
                         box(
@@ -1095,7 +1247,7 @@ class Adventure(BaseCog):
                     )
             else:
                 c.backpack[newitem.name] = newitem
-                await self.config.user(ctx.author).set(c._to_json())
+                await self._update_hero(ctx.author, c)
                 await ctx.send(
                     box(
                         f"{self.E(ctx.author.display_name)}, your new {newitem}"
@@ -1301,7 +1453,7 @@ class Adventure(BaseCog):
             c.backpack[item.name].owned += 1
         else:
             c.backpack[item.name] = item
-        await self.config.user(user).set(c._to_json())
+        await self._update_hero(user, c)
         await ctx.send(
             box(
                 f"An item named {item} has been created"
@@ -1350,7 +1502,7 @@ class Adventure(BaseCog):
                 lang="css",
             )
         )
-        await self.config.user(user).set(c._to_json())
+        await self._update_hero(user, c)
 
     @commands.command()
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
@@ -1546,7 +1698,7 @@ class Adventure(BaseCog):
                                 if len(tinker_wep) >= 1:
                                     for item in tinker_wep:
                                         del c.backpack[item.name]
-                                    await self.config.user(ctx.author).set(c._to_json())
+                                    await self._update_hero(ctx.author, c)
                                     await class_msg.edit(
                                         content=box(
                                             (
@@ -1560,7 +1712,7 @@ class Adventure(BaseCog):
                                 c.heroclass["ability"] = False
                                 c.heroclass["pet"] = {}
                                 c.heroclass = classes[clz]
-                                await self.config.user(ctx.author).set(c._to_json())
+                                await self._update_hero(ctx.author, c)
                                 await self._clear_react(class_msg)
                                 await class_msg.edit(
                                     content=box(
@@ -1572,7 +1724,7 @@ class Adventure(BaseCog):
                                     )
                                 )
                             c.heroclass = classes[clz]
-                            await self.config.user(ctx.author).set(c._to_json())
+                            await self._update_hero(ctx.author, c)
                             await self._clear_react(class_msg)
                             return await class_msg.edit(
                                 content=class_msg.content + box(now_class_msg, lang="css")
@@ -1583,7 +1735,7 @@ class Adventure(BaseCog):
                             return
                     else:
                         c.heroclass = classes[clz]
-                        await self.config.user(ctx.author).set(c._to_json())
+                        await self._update_hero(ctx.author, c)
                         await self._clear_react(class_msg)
                         return await class_msg.edit(content=box(now_class_msg, lang="css"))
                 else:
@@ -1637,7 +1789,7 @@ class Adventure(BaseCog):
             )
         else:
             c.treasure[redux.index(1)] -= amount
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             if amount > 1:
                 items = await self._open_chests(ctx, ctx.author, box_type, amount)
                 adjust = max([len(str(i)) for i in items])
@@ -1689,7 +1841,7 @@ class Adventure(BaseCog):
                     f"{self.E(ctx.author.display_name)}, ability already in use."
                 )
             c.heroclass["ability"] = True
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
         await ctx.send(
             f"♪♫♬ {bold(ctx.author.display_name)} is whipping up a performance. ♬♫♪"
         )
@@ -1904,7 +2056,7 @@ class Adventure(BaseCog):
                 )
                 await user_msg.edit(content=f"{pet_msg}\n{pet_msg2}\n{pet_msg3}")
                 c.heroclass["pet"] = self.PETS[pet]
-                await self.config.user(ctx.author).set(c._to_json())
+                await self._update_hero(ctx.author, c)
             else:
                 pet_msg3 = box(f"{bonus}\nThe {self.PETS[pet]['name']} escaped.", lang="css")
                 await user_msg.edit(content=f"{pet_msg}\n{pet_msg2}\n{pet_msg3}")
@@ -1943,7 +2095,7 @@ class Adventure(BaseCog):
                 log.error("Error with the new character sheet", exc_info=True)
                 return
             c.heroclass["forage"] = time.time()
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
         else:
             cooldown_time = (c.heroclass["forage"] + 900) - time.time()
             return await ctx.send(
@@ -1969,7 +2121,7 @@ class Adventure(BaseCog):
             )
         if c.heroclass["pet"]:
             c.heroclass["pet"] = {}
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             return await ctx.send(
                 box(
                     f"{self.E(ctx.author.display_name)} released their pet into the wild.",
@@ -2007,7 +2159,7 @@ class Adventure(BaseCog):
                     f"{self.E(ctx.author.display_name)}, ability already in use."
                 )
             c.heroclass["ability"] = True
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(
                 f"{bold(ctx.author.display_name)} is starting to froth at the mouth...🗯️"
             )
@@ -2038,7 +2190,7 @@ class Adventure(BaseCog):
                     f"{self.E(ctx.author.display_name)}, ability already in use."
                 )
             c.heroclass["ability"] = True
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(
                 f"{bold(ctx.author.display_name)} is focusing all of their energy...⚡️"
             )
@@ -2082,7 +2234,7 @@ class Adventure(BaseCog):
                 c.skill["att"] = 0
                 c.skill["cha"] = 0
                 c.skill["int"] = 0
-                await self.config.user(ctx.author).set(c._to_json())
+                await self._update_hero(ctx.author, c)
                 await bank.withdraw_credits(ctx.author, offering)
                 await ctx.send(
                     f"{self.E(ctx.author.display_name)}, your skill points have been reset."
@@ -2117,7 +2269,7 @@ class Adventure(BaseCog):
             elif spend == "intelligence":
                 c.skill["pool"] -= 1
                 c.skill["int"] += 1
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(
                 f"{self.E(ctx.author.display_name)}, you "
                 f"permanently raised your {spend} value by one."
@@ -2202,7 +2354,7 @@ class Adventure(BaseCog):
                 )
         if msg:
             await ctx.send(box(msg, lang="css"))
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
         else:
             await ctx.send(
                 f"{self.E(ctx.author.display_name)}, "
@@ -2273,7 +2425,7 @@ class Adventure(BaseCog):
                     continue
                 if c.heroclass["name"] != "Ranger" and c.heroclass["ability"]:
                     c.heroclass["ability"] = False
-                    await self.config.user(user).set(c._to_json())
+                    await self._update_hero(user, c)
         del self._sessions[ctx.guild.id]
         if group:
             del self._groups[ctx.guild.id]
@@ -2372,9 +2524,9 @@ class Adventure(BaseCog):
             timer = 90
             text = box(f"\n [{challenge} Alarm!]", lang="css")
         elif self.MONSTERS[challenge]["miniboss"]:
-            timer = 60
+            timer = 75
         else:
-            timer = 30
+            timer = 60
         self._sessions[ctx.guild.id] = GameSession(
             challenge=challenge,
             amount=amount,
@@ -2448,7 +2600,7 @@ class Adventure(BaseCog):
                 await adventure_msg.edit(embed=embed)
             else:
                 await adventure_msg.edit(content=box(f"{adventure_txt}\n{basilisk_text}"))
-            timeout = 60
+            timeout = 75
         else:
             if use_embeds:
                 embed.description = f"{adventure_txt}\n{normal_text}"
@@ -2457,7 +2609,7 @@ class Adventure(BaseCog):
                 await adventure_msg.edit(embed=embed)
             else:
                 await adventure_msg.edit(content=box(f"{adventure_txt}\n{normal_text}"))
-            timeout = 30
+            timeout = 60
         session.message_id = adventure_msg.id
         start_adding_reactions(adventure_msg, self._adventure_actions if owner_challenge else self._adventure_run, ctx.bot.loop)
 
@@ -2590,7 +2742,7 @@ class Adventure(BaseCog):
                     c.backpack[item.name].owned += 1
                 else:
                     c.backpack[item.name] = item
-            await self.config.user(user).set(c._to_json())
+            await self._update_hero(user, c)
             await channel.send(
                 (
                     f"{self.E(user.display_name)} bought the {items['itemname']} for "
@@ -2963,7 +3115,7 @@ class Adventure(BaseCog):
                 await ctx.send(even_msg)
             except ValueError:
                 pass
-            await self.config.user(user).set(c._to_json())
+            await self._update_hero(user, c)
 
     async def _class_bonus(self, class_name, user_list, stat_checks):
         ability_triggered = False
@@ -3003,7 +3155,7 @@ class Adventure(BaseCog):
                 continue
             bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
             if c.heroclass["name"] == "Cleric" and not aura:
-                chance = min(int(bonus_cleric / 2 + 1), c.lvl)
+                chance = min(int(bonus_cleric / 1.5 + 1), c.lvl * 2)
                 aura_roll = random.randint(1, 100)
                 if aura_roll in range (1, chance):
                     aura = True
@@ -3402,7 +3554,7 @@ class Adventure(BaseCog):
                 await ctx.send(f"{self.E(user.display_name)}, you have skillpoints available.")
         if special is not False:
             c.treasure = [sum(x) for x in zip(c.treasure, special)]
-        await self.config.user(user).set(c._to_json())
+        await self._update_hero(user, c)
 
     async def _adv_countdown(self, ctx, seconds, title) -> asyncio.Task:
         await self._data_check(ctx)
@@ -3555,7 +3707,7 @@ class Adventure(BaseCog):
                 c.backpack[item.name].owned += 1
             else:
                 c.backpack[item.name] = item
-        await self.config.user(ctx.author).set(c._to_json())
+        await self._update_hero(ctx.author, c)
         return items
 
     async def _open_chest(self, ctx, user, chest_type):
@@ -3643,7 +3795,7 @@ class Adventure(BaseCog):
                     )
                 )
             )
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             return
         await self._clear_react(open_msg)
         if self._treasure_controls[react.emoji] == "sell":
@@ -3664,7 +3816,7 @@ class Adventure(BaseCog):
                 )
             )
             await self._clear_react(open_msg)
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
         elif self._treasure_controls[react.emoji] == "equip":
             # equip = {"itemname": item[0]["itemname"], "item": item[0]["item"]}
             if not getattr(c, item.slot[0]):
@@ -3681,7 +3833,7 @@ class Adventure(BaseCog):
                 )
             await open_msg.edit(content=equip_msg)
             c = await c._equip_item(item, False)
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
         else:
             # async with self.config.user(ctx.author).all() as userinfo:
             # userinfo["items"]["backpack"].update({item[0]["itemname"]: item[0]["item"]})
@@ -3698,7 +3850,7 @@ class Adventure(BaseCog):
                 )
             )
             await self._clear_react(open_msg)
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
 
     @staticmethod
     async def _remaining(epoch):

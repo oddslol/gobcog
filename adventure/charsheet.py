@@ -178,6 +178,7 @@ class Character(Item):
     """An class to represent the characters stats"""
 
     def __init__(self, **kwargs):
+        self.name: str = kwargs.pop("name")
         self.exp: int = kwargs.pop("exp")
         self.lvl: int = kwargs.pop("lvl")
         self.treasure: List[int] = kwargs.pop("treasure")
@@ -422,6 +423,13 @@ class Character(Item):
     async def _from_json(cls, config: Config, user: discord.Member):
         """Return a Character object from config and user"""
         data = await config.user(user).all()
+        try:
+            data = data["active"]
+        # doesn't break current heroes - pythonic view of ask for forgiveness
+        except AttributeError:
+            pass
+        if "name" not in data.keys():
+            data["name"] = "active"
         balance = await bank.get_balance(user)
         equipment = {
             k: Item._from_json(v) if v else None
@@ -448,6 +456,7 @@ class Character(Item):
             data["treasure"].append(0)
         # log.debug(data["items"]["backpack"])
         hero_data = {
+            "name": data["name"],
             "exp": data["exp"],
             "lvl": data["lvl"],
             "att": data["att"],
@@ -471,7 +480,8 @@ class Character(Item):
         for k, v in self.backpack.items():
             for n, i in v._to_json().items():
                 backpack[n] = i
-        return {
+        return { 
+            "name": self.name, # should always have a name even fresh because we add one in _from_json
             "exp": self.exp,
             "lvl": self.lvl,
             "att": self.att,
@@ -494,5 +504,5 @@ class Character(Item):
             "backpack": backpack,
             "loadouts": self.loadouts,  # convert to dict of items
             "heroclass": self.heroclass,
-            "skill": self.skill,
+            "skill": self.skill, 
         }
