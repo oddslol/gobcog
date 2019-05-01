@@ -1036,6 +1036,8 @@ class Adventure(BaseCog):
         """
 
         # Thanks to flare#0001 for the idea and writing the first instance of this
+        if amount < 1:
+            return await ctx.send("Nice try :smirk:")
         try:
             c = await Character._from_json(self.config, ctx.author)
         except Exception:
@@ -1791,6 +1793,8 @@ class Adventure(BaseCog):
         """This opens one of your precious treasure chests.
         Use the box rarity type with the command: normal, rare, epic or legendary.
         """
+        if amount < 1:
+            return await ctx.send("Nice try :smirk:")
         if not await self.allow_in_dm(ctx):
             return await ctx.send("This command is not available in DM's on this bot.")
         try:
