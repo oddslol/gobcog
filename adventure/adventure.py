@@ -201,7 +201,7 @@ class Adventure(BaseCog):
         if not await self.allow_in_dm(ctx):
             return await ctx.send("This command is not available in DM's on this bot.")
         if not ctx.invoked_subcommand:
-            msg = f"{bold(self.E(ctx.author.display_name))}, these are all yours heroes:\n"
+            msg = f"{bold(self.E(ctx.author.display_name))}, these are all your heroes:"
             embed = discord.Embed(colour=discord.Colour.blurple())
             embed.description = msg
             use_embeds = (
@@ -219,8 +219,19 @@ class Adventure(BaseCog):
                         del raw[key]
                 await self.config.user(ctx.author).set(raw)
             # To be improved down the line with stats of current heroes?
+            current_hero = ""
+            count = 0
             for hero_name, hero_charsheet in raw.items():
-                msg += f"**{hero_name}**\n"
+                if hero_name.lower() in "active":
+                    current_hero = hero_charsheet["name"]
+            for hero_name in raw.keys():
+                if hero_name not in "active":
+                    count += 1
+                    msg += f"\n**{hero_name}**"
+                    if hero_name == current_hero:
+                        msg+= f"   <---- current hero"
+            if count == 0:
+                return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
             if use_embeds:
                 embed.description = msg
                 return await ctx.send(embed=embed)
@@ -228,36 +239,35 @@ class Adventure(BaseCog):
                 return await ctx.send(msg)
 
     @_hero.command(name="new")
-    async def hero_new(self, ctx, *, name: str):
-        raw = await self.config.user(ctx.author).get_raw()
-        name = name.title()
+    async def hero_new(self, ctx, *, name: str = None):
         cost = 50000  #default
         currency_name = await bank.get_currency_name(ctx.author.guild)
         if await self.config.guild(ctx.guild).hero_cost():
             cost = await self.config.guild(ctx.guild).hero_cost()
+        if not await bank.can_spend(ctx.author, cost):
+            return await ctx.send(f"It costs {cost} {currency_name} to recruit a new hero. You cannot afford it.")
 
-        recruit_msg = (
-                        f"{self.E(ctx.author.display_name)}, it costs {cost} {currency_name} to recruit a new hero to your cause.\n"
-                        f"Do you wish to proceed?\n"
-                    )
-        msg = await ctx.send(recruit_msg)
-        start_adding_reactions(msg, ReactionPredicate.YES_OR_NO_EMOJIS)
-        pred = ReactionPredicate.yes_or_no(msg, ctx.author)
-        try:
-            await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
-        except asyncio.TimeoutError:
-            await self._clear_react(msg)
-            return
-        if pred.result:  # user reacted with Yes.
-            try:
-                await bank.withdraw_credits(ctx.author, cost)
-            except ValueError:
-                recruit_msg += f"You cannot afford it, peasant."
-                return await msg.edit(recruit_msg)
+        raw = await self.config.user(ctx.author).get_raw()
+        if name:
+            name = name.title()
         else:
-            return await msg.delete()
+            await ctx.send(f"{self.E(ctx.author.display_name)}, please enter a name for your **new** hero:")
+            try:
+                reply = await ctx.bot.wait_for(
+                    "message", check=MessagePredicate.same_context(ctx), timeout=30
+                )
+            except asyncio.TimeoutError:
+                return
+            if not reply:
+                return
+            else:
+                # stops current_name = raw["name"] line from returning an actual character
+                if reply.content.lower() in "name":
+                    return await ctx.send(f"{self.E(ctx.author.display_name)}, you cannot call your hero 'name'.")
+                name = reply.content.title()
         if name in raw.keys():
             return await ctx.send(f"{self.E(ctx.author.display_name)}, you already have a hero with that name.")
+
         # all heroes should be active but when first deployed they won't have a name, we need to set it
         try:
             if "name" in raw.keys():
@@ -286,6 +296,8 @@ class Adventure(BaseCog):
                     # stops current_name = raw["name"] line from returning an actual character
                     if reply.content.lower() in "name":
                         return await ctx.send(f"{self.E(ctx.author.display_name)}, you cannot call your hero 'name'.")
+                    if reply.content.lower() in name.lower():
+                        return await ctx.send(f"{self.E(ctx.author.display_name)}, you cannot call both your heroes the same name.")
                     current_name = reply.content.title()
                     character["name"] = current_name
             await ctx.send(f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.")
@@ -295,6 +307,28 @@ class Adventure(BaseCog):
         except Exception:
             log.error("Error saving old hero details", exc_info=True)
             return 
+        
+        recruit_msg = (
+                        f"{self.E(ctx.author.display_name)}, it costs {cost} {currency_name} to recruit {name} to your cause.\n"
+                        f"Do you wish to proceed?\n"
+                    )
+        msg = await ctx.send(recruit_msg)
+        start_adding_reactions(msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+        pred = ReactionPredicate.yes_or_no(msg, ctx.author)
+        try:
+            await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+        except asyncio.TimeoutError:
+            await self._clear_react(msg)
+            return
+        if pred.result:  # user reacted with Yes.
+            try:
+                await bank.withdraw_credits(ctx.author, cost)
+            except ValueError:
+                await self._clear_react(msg)
+                return await msg.edit(content=f"You cannot afford it, peasant.")
+        else:
+            await self._clear_react(msg)
+            return await msg.edit(content=f"Keeping with your current hero.")
 
         raw[name] = self.default_character
         raw[name]["name"] = name
@@ -312,7 +346,7 @@ class Adventure(BaseCog):
         raw = await self.config.user(ctx.author).get_raw()
         name = name.title()
         if name in "Active":
-            return await ctx.send(f"{self.E(ctx.author.display_name)}, your current hero ***is*** active!")
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, your current hero ***is*** {name}!")
         if name not in raw.keys():
             return await ctx.send(f"{self.E(ctx.author.display_name)}, you do not have a hero with that name.")
         try:
@@ -320,6 +354,11 @@ class Adventure(BaseCog):
             raw[current_name] = raw["active"]  # save current hero
             raw["active"] = raw[name]
             await self.config.user(ctx.author).set(raw)
+            msg = (
+                    f"You have switched your hero to **{name}**!\n"
+                    f"**{current_name}** waits to be called upon again..."
+                )
+            return await ctx.send(msg)
         except Exception:
             log.error("Error changing hero", exc_info=True)
             return await ctx.send(f"Sorry about this, {self.E(ctx.author.display_name)}... but we couldn't change your hero.")
