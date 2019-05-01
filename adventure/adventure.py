@@ -2132,7 +2132,7 @@ class Adventure(BaseCog):
         if "forage" not in c.heroclass:
             c.heroclass["forage"] = 901
         if c.heroclass["forage"] <= time.time() - 900:
-            await self._open_chest(ctx, c.heroclass["pet"]["name"], "pet")
+            await self._open_chest(ctx, c.heroclass["pet"]["name"], "pet", c.heroclass["pet"]["cha"])
             try:
                 c = await Character._from_json(self.config, ctx.author)
             except Exception:
@@ -3689,16 +3689,16 @@ class Adventure(BaseCog):
                 ctx = await self.bot.get_context(message)
                 await self._trader(ctx)
 
-    async def _roll_chest(self, chest_type: str):
+    async def _roll_chest(self, chest_type: str, pet_cha: int = 0):
         roll = random.randint(1, 500)
         if chest_type.lower() in "pet":
-            if roll == 1:
+            if roll <= int(pet_cha * 18 / 140):
                 chance = self.TR_LEGENDARY
-            elif roll <= 25:
+            elif roll <= int(pet_cha * 90 / 140):
                 chance = self.TR_EPIC
-            elif roll <= 125:
+            elif roll <= int(pet_cha * 315 / 140):
                 chance = self.TR_RARE
-            elif roll <= 375:
+            elif roll <= min(365 + pet_cha, 475):
                 chance = self.TR_COMMON
             else:
                 return None
@@ -3755,7 +3755,7 @@ class Adventure(BaseCog):
         await self._update_hero(ctx.author, c)
         return items
 
-    async def _open_chest(self, ctx, user, chest_type):
+    async def _open_chest(self, ctx, user, chest_type, pet_cha: int = 0):
         if hasattr(user, "display_name"):
             chest_msg = (
                 f"{self.E(user.display_name)} is opening a treasure chest. What riches lay inside?"
@@ -3773,7 +3773,7 @@ class Adventure(BaseCog):
         open_msg = await ctx.send(box(chest_msg, lang="css"))
         await asyncio.sleep(2)
 
-        item = await self._roll_chest(chest_type)
+        item = await self._roll_chest(chest_type, pet_cha)
         if chest_type == "pet" and not item:
             await open_msg.edit(
                     content=box(
