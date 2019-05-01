@@ -185,10 +185,6 @@ class Adventure(BaseCog):
     async def _update_hero(self, user: discord.Member, c: Character, hero_name: str = "active"):
         raw = await self.config.user(user).get_raw()
         raw[hero_name] = c._to_json()
-        old_char = ["int", "att", "cha", "treasure", "items", "backpack", "loadouts", "heroclass", "skill"]
-        if any(old_char) in raw.keys():
-            for key in old_char:
-                del raw[key]
         try:
             return await self.config.user(user).set(raw)
         except Exception:
@@ -216,6 +212,12 @@ class Adventure(BaseCog):
             # Heroes aren't setup yet but they will be as soon as they do literally anything, no need for custom msg
             if "active" not in raw.keys():  
                 return
+            old_char = ["int", "att", "cha", "exp", "lvl", "treasure", "items", "backpack", "loadouts", "heroclass", "skill"]
+            if any([x for x in old_char if x in raw.keys()]):
+                for key in old_char:
+                    if key in raw.keys():
+                        del raw[key]
+                await self.config.user(ctx.author).set(raw)
             # To be improved down the line with stats of current heroes?
             for hero_name, hero_charsheet in raw.items():
                 msg += f"**{hero_name}**\n"
