@@ -3003,7 +3003,7 @@ class Adventure(BaseCog):
                 continue
             bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
             if c.heroclass["name"] == "Cleric" and not aura:
-                chance = min(int(bonus_cleric / 1.5 + 1), c.lvl * 2)
+                chance = min(int(bonus_cleric / 2 + 1), c.lvl)
                 aura_roll = random.randint(1, 100)
                 if aura_roll in range (1, chance):
                     aura = True
