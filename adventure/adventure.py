@@ -202,6 +202,12 @@ class Adventure(BaseCog):
         if not await self.allow_in_dm(ctx):
             return await ctx.send("This command is not available in DM's on this bot.")
         if not ctx.invoked_subcommand:
+            # update our current hero first
+            try:
+                c = await Character._from_json(self.config, ctx.author)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                return
             msg = f"{self.E(ctx.author.display_name)}, these are all your heroes:"
             raw = await self.config.user(ctx.author).get_raw()
             # Heroes aren't setup yet but they will be as soon as they do literally anything, no need for custom msg
@@ -227,12 +233,17 @@ class Adventure(BaseCog):
             for hero_name, hero_charsheet in raw.items():
                 if hero_name not in "active":
                     # default used to be "class" instead of heroclass for some reason
-                    heroclass = hero_charsheet["heroclass"]["name"] if "heroclass" in hero_charsheet else hero_charsheet["class"]["name"]
-                    herolvl = hero_charsheet["lvl"]
+                    if hero_name == current_hero:
+                        heroclass = c.heroclass["name"]
+                        herolvl = c.lvl
+                    else:
+                        heroclass = hero_charsheet["heroclass"]["name"] if "heroclass" in hero_charsheet else hero_charsheet["class"]["name"]
+                        herolvl = hero_charsheet["lvl"]
                     count += 1
                     msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}} | {heroclass}{spacer:>{9-len(heroclass)}} | {herolvl}" 
                     if hero_name == current_hero:
-                        msg+= f"  <---- current"
+                        msg+= f"  **"
+            msg+= f"** - Your current hero"
             if count == 0:
                 return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
             for page in pagify(msg):
@@ -456,6 +467,8 @@ class Adventure(BaseCog):
             except Exception:
                 log.error("Error with the new character sheet", exc_info=True)
                 return
+            if clz in c.heroclass["name"]:
+                return await ctx.send(f"{self.E(ctx.author.display_name)} you are already that class.")
             if "cooldown" not in c.heroclass:
                 c.heroclass["cooldown"] = 601
             if c.heroclass["cooldown"] <= time.time() - 600:
@@ -2494,6 +2507,7 @@ class Adventure(BaseCog):
         del self._sessions[ctx.guild.id]
         if group:
             del self._groups[ctx.guild.id]
+            del self._groups[ctx.guild.id+1]
 
     async def _find_challenge(self, dmg, dipl):
         challenges = list(self.MONSTERS.keys())
@@ -2508,7 +2522,7 @@ class Adventure(BaseCog):
                 i += 1
                 challenge = challenges[i]
         else:
-            while self.MONSTERS[challenge][hp_dipl] > strongest_stat and i < len(challenges) and not self.MONSTERS[challenge]["boss"]:
+            while (self.MONSTERS[challenge][hp_dipl] > strongest_stat or self.MONSTERS[challenge]["boss"]) and i < len(challenges):
                 i += 1
                 challenge = challenges[i]
         amount = 1
@@ -2602,9 +2616,24 @@ class Adventure(BaseCog):
             timer=timer,
             monster=self.MONSTERS[challenge],
         )
+        
         session = self._sessions[ctx.guild.id]
         if group:
-            session.fight, session.magic, session.pray, session.talk = group.fight, group.magic, group.pray, group.talk
+            session.fight, session.magic, session.talk, session.pray = group.fight, group.magic, group.talk, group.pray
+            # Users are added to group even after "group" bit ends due to on_reaction_add
+            # So we copy group here and refer to it later to work out who joins the fight
+            # Note asyncio doesn't play nice with deepcopy so we do it manually 
+            group_users = AdventureGroup(message_id=0)
+            for user in group.fight:
+                group_users.fight.append(user)
+            for user in group.magic:
+                group_users.magic.append(user)
+            for user in group.talk:
+                group_users.talk.append(user)
+            for user in group.pray:
+                group_users.pray.append(user)
+            self._groups[ctx.guild.id+1] = group_users
+
         adventure_txt = (
             f"{adventure_txt}{text}\n{random.choice(self.LOCATIONS)}\n"
             f"**{self.E(ctx.author.display_name)}**{random.choice(self.RAISINS)}"
@@ -2829,6 +2858,8 @@ class Adventure(BaseCog):
         critlist: list = []
         failed = False
         session = self._sessions[ctx.guild.id]
+        group_users = self._groups[ctx.guild.id+1]
+        group = self._groups[ctx.guild.id]
         people = len(session.fight) + len(session.talk) + len(session.pray) + len(session.magic)
 
         try:
@@ -2872,6 +2903,31 @@ class Adventure(BaseCog):
 
         result_msg = run_msg + pray_msg + talk_msg + fight_msg        
         challenge_attrib = session.attribute
+
+        # we can use the participants set to hold these, is the most reasonable place to put them
+        group_users.participants = set(group_users.fight + group_users.magic + group_users.pray + group_users.talk)
+        session.participants = set(session.fight + session.magic + session.pray + session.talk)
+        added_users = [x for x in session.participants if x not in group_users.participants]
+        if len(added_users) >= 1:
+            new_dmg = 0
+            new_talk = 0
+            added = False
+            added_msg = f"New adventurers joined the group to help...\n"
+            for user in added_users:
+                c = await Character._from_json(self.config, user)
+                new_dmg += max(c.att + c.skill['att'], c.int + c.skill['int']) + 10  # treat them like others in group
+                new_talk += c.skill['cha'] + c.cha + 10
+            if new_dmg >= self.MONSTERS[challenge]["hp"] or new_talk >= self.MONSTERS[challenge]["dipl"]:
+                new_amount = max(int(new_dmg/self.MONSTERS[challenge]["hp"]), int(new_talk/self.MONSTERS[challenge]["dipl"]))
+                extra_challenge, plural = await self._plural(challenge, new_amount)
+                session.amount += new_amount
+                added = True
+                attack = f"attack" if new_amount > 1 else f"attacks"
+                added_msg += (f"**Watch out!**\n"
+                            f"**{new_amount} more {extra_challenge}{plural}** {attack} the group from behind!")
+            await ctx.send(added_msg)
+            if added:  # pause for dramatic effect :joy:
+                await asyncio.sleep(2)
 
         hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[challenge_attrib][0] * session.amount
         dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[challenge_attrib][1] * session.amount
