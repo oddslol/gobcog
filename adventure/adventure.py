@@ -95,7 +95,7 @@ class Adventure(BaseCog):
         
         default_user = { "active" : self.default_character }
 
-        default_guild = {"cart_channels": [], "god_name": "", "cart_name": "", "embed": True, "hero_cost": 50000}
+        default_guild = {"cart_channels": [], "god_name": "", "cart_name": "", "embed": True, "hero_cost": 50000, "class_cost": 10000}
         default_global = {"god_name": "Herbert", "cart_name": "Hawl's brother", "theme": "default"}
 
         self.RAISINS: list = None
@@ -197,6 +197,7 @@ class Adventure(BaseCog):
 
         New hero:     `[p]hero new <name>`
         Change hero:  `[p]hero change <name>`
+        Choose class: `[p]hero class <class> <info>`
         """
         if not await self.allow_in_dm(ctx):
             return await ctx.send("This command is not available in DM's on this bot.")
@@ -239,6 +240,7 @@ class Adventure(BaseCog):
 
     @_hero.command(name="new")
     async def hero_new(self, ctx, *, name: str = None):
+        """Create a new hero"""
         cost = 50000  #default
         currency_name = await bank.get_currency_name(ctx.author.guild)
         if await self.config.guild(ctx.guild).hero_cost():
@@ -301,8 +303,6 @@ class Adventure(BaseCog):
                     character["name"] = current_name
             await ctx.send(f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.")
             raw[current_name] = character
-            log.debug("this is in hero new when you save a hero:")
-            log.debug(raw)
         except Exception:
             log.error("Error saving old hero details", exc_info=True)
             return 
@@ -342,6 +342,7 @@ class Adventure(BaseCog):
     @_hero.command(name="change")
     @commands.cooldown(rate=1, per=30, type=commands.BucketType.user)
     async def hero_change(self, ctx, *, name: str):
+        """Allows you to switch between your existing heroes"""
         raw = await self.config.user(ctx.author).get_raw()
         name = name.title()
         if name in ["Active", raw["active"]["name"]]:
@@ -361,6 +362,253 @@ class Adventure(BaseCog):
         except Exception:
             log.error("Error changing hero", exc_info=True)
             return await ctx.send(f"Sorry about this, {self.E(ctx.author.display_name)}... but we couldn't change your hero.")
+
+    @_hero.command(name="class")
+    async def hero_class(self, ctx, clz: str = None, action: str = None):
+        """This allows you to select a class if you are Level 10 or above"""
+        if not await self.allow_in_dm(ctx):
+            return await ctx.send("This command is not available in DM's on this bot.")
+
+        classes = {
+            "Wizard": {
+                "name": "Wizard",
+                "ability": False,
+                "desc": (
+                    "Wizards have the option to focus and add big bonuses to their magic, "
+                    "but their focus can sometimes go astray...\n"
+                    "The magic glyphs tattooed on their body are known to be bound with god, "
+                    "and can amplify the prayers.\n"
+                    "Use the focus command when attacking in an adventure."
+                ),
+            },
+            "Tinkerer": {
+                "name": "Tinkerer",
+                "ability": False,
+                "desc": (
+                    "Tinkerers can forge two different items into a device "
+                    "bound to their very soul.\n"
+                    "From time to time, Tinkerers will sharpen the weapons of the fighters or "
+                    "craft mana potions for the magicians, slightly increasing their damages.\n"
+                    "Use the forge command."
+                ),
+            },
+            "Berserker": {
+                "name": "Berserker",
+                "ability": False,
+                "desc": (
+                    "Berserkers have the option to rage and add big bonuses to attacks, "
+                    "but fumbles hurt.\n"
+                    "When arguing with an enemy, Bersekers can enter in a state of wild fury, "
+                    "that intimidates the enemy and makes the negotiation easier for the whole party.\n"
+                    "Use the rage command when attacking in an adventure."
+                ),
+            },
+            "Cleric": {
+                "name": "Cleric",
+                "ability": False,
+                "desc": (
+                    "Clerics can bless the entire group and add small bonus to each adventurer, "
+                    "but prayers can remain unanswered...\n"
+                    "Divine aura can radiate from Clerics while praying, increasing the critical chances and abilities of fighters and wizards.\n"
+                    "Use the bless command when praying in an adventure."
+                ),
+            },
+            "Ranger": {
+                "name": "Ranger",
+                "ability": False,
+                "desc": (
+                    "Rangers can gain a special pet, which can find items and give "
+                    "reward bonuses.\nUse the pet command to see pet options."
+                ),
+                "pet": {},
+                "forage": 0.0,
+            },
+            "Bard": {
+                "name": "Bard",
+                "ability": False,
+                "desc": (
+                    "Bards can perform to aid their comrades in diplomacy.\n"
+                    "Due to their natural intelligence, they learnt a little bit about magic "
+                    "and have a chance to decrease magic resistance with their melodious voices.\n"
+                    "Bards are also talented with daggers and can weaken physical resistance through precision incisions.\n"
+                    "Use the music command when being diplomatic in an adventure."
+                ),
+            },
+        }
+
+        if clz is None:
+            await ctx.send(
+                (
+                    f"So you feel like taking on a class, **{self.E(ctx.author.display_name)}**?\n"
+                    "Available classes are: Tinkerer, Berserker, Wizard, Cleric, Ranger and Bard.\n"
+                    f"Use `{ctx.prefix}hero class name-of-class` to choose one."
+                )
+            )
+
+        else:
+            clz = clz.title()
+            if clz in classes and action == "info":
+                return await ctx.send(f"{classes[clz]['desc']}")
+            elif clz not in classes:
+                return await ctx.send(f"{clz} may be a class somewhere, but not on my watch.")
+            try:
+                c = await Character._from_json(self.config, ctx.author)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                return
+            if "cooldown" not in c.heroclass:
+                c.heroclass["cooldown"] = 601
+            if c.heroclass["cooldown"] <= time.time() - 600:
+                bal = await bank.get_balance(ctx.author)
+                currency_name = await bank.get_currency_name(ctx.guild)
+                if str(currency_name).startswith("<"):
+                    currency_name = "credits"
+                spend = 10000
+                if await self.config.guild(ctx.guild).class_cost():
+                    spend = await self.config.guild(ctx.guild).class_cost()
+                class_msg = await ctx.send(
+                    box(
+                        (
+                            f"This will cost {spend} {currency_name}. "
+                            f"Do you want to continue, {self.E(ctx.author.display_name)}?"
+                        ),
+                        lang="css",
+                    )
+                )
+                broke = box(
+                    f"You don't have enough {currency_name} to train to be a {clz.title()}.",
+                    lang="css",
+                )
+                start_adding_reactions(class_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+                pred = ReactionPredicate.yes_or_no(class_msg, ctx.author)
+                try:
+                    await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+                except asyncio.TimeoutError:
+                    await self._clear_react(class_msg)
+                    return
+
+                if not pred.result:
+                    await class_msg.edit(
+                        content=box(
+                            (
+                                f"{self.E(ctx.author.display_name)} decided"
+                                f" to continue being a {c.heroclass['name']}."
+                            ),
+                            lang="css",
+                        )
+                    )
+                    return await self._clear_react(class_msg)
+                if bal < spend:
+                    await class_msg.edit(content=broke)
+                    return await self._clear_react(class_msg)
+                try:
+                    await bank.withdraw_credits(ctx.author, spend)
+                except ValueError:
+                    return await class_msg.edit(content=broke)
+
+                if clz in classes and action is None:
+                    now_class_msg = (
+                        f"Congratulations, {self.E(ctx.author.display_name)}.\n"
+                        f"You are now a {classes[clz]['name']}."
+                    )
+                    if c.lvl >= 10:
+                        c.heroclass["cooldown"] = time.time()
+                        if c.heroclass["name"] == "Tinkerer" or c.heroclass["name"] == "Ranger":
+                            if c.heroclass["name"] == "Tinkerer":
+                                await self._clear_react(class_msg)
+                                await class_msg.edit(
+                                    content=box(
+                                        (
+                                            f"{self.E(ctx.author.display_name)}, "
+                                            "you will lose your forged"
+                                            " device if you change your class.\nShall I proceed?"
+                                        ),
+                                        lang="css",
+                                    )
+                                )
+                            else:
+                                await self._clear_react(class_msg)
+                                await class_msg.edit(
+                                    content=box(
+                                        (
+                                            f"{self.E(ctx.author.display_name)}, "
+                                            "you will lose your pet "
+                                            "if you change your class.\nShall I proceed?"
+                                        ),
+                                        lang="css",
+                                    )
+                                )
+                            start_adding_reactions(class_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+                            pred = ReactionPredicate.yes_or_no(class_msg, ctx.author)
+                            try:
+                                await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+                            except asyncio.TimeoutError:
+                                await self._clear_react(class_msg)
+                                return
+                            if pred.result:  # user reacted with Yes.
+                                if c.heroclass["name"] == "Tinkerer":
+                                    tinker_wep = []
+                                    for item in c.current_equipment():
+                                        if item.rarity == "forged":
+                                            c = await c._unequip_item(item)
+                                    for name, item in c.backpack.items():
+                                        if item.rarity == "forged":
+                                            tinker_wep.append(item)
+                                    if len(tinker_wep) >= 1:
+                                        for item in tinker_wep:
+                                            del c.backpack[item.name]
+                                        await self._update_hero(ctx.author, c)
+                                        await class_msg.edit(
+                                            content=box(
+                                                (
+                                                    f"{humanize_list(tinker_wep)} has "
+                                                    "run off to find a new master."
+                                                ),
+                                                lang="css",
+                                            )
+                                        )
+                                else:
+                                    c.heroclass["ability"] = False
+                                    c.heroclass["pet"] = {}
+                                    c.heroclass = classes[clz]
+                                    await self._update_hero(ctx.author, c)
+                                    await self._clear_react(class_msg)
+                                    await class_msg.edit(
+                                        content=box(
+                                            (
+                                                f"{self.E(ctx.author.display_name)} released their"
+                                                f" pet into the wild.\n"
+                                            ),
+                                            lang="css",
+                                        )
+                                    )
+                                c.heroclass = classes[clz]
+                                await self._update_hero(ctx.author, c)
+                                await self._clear_react(class_msg)
+                                return await class_msg.edit(
+                                    content=class_msg.content + box(now_class_msg, lang="css")
+                                )
+
+                            else:
+                                ctx.command.reset_cooldown(ctx)
+                                return
+                        else:
+                            c.heroclass = classes[clz]
+                            await self._update_hero(ctx.author, c)
+                            await self._clear_react(class_msg)
+                            return await class_msg.edit(content=box(now_class_msg, lang="css"))
+                    else:
+                        ctx.command.reset_cooldown(ctx)
+                        await ctx.send(
+                            f"{self.E(ctx.author.display_name)}, you need "
+                            "to be at least level 10 to choose a class."
+                        )
+            else:
+                cooldown_time = (c.heroclass["cooldown"] + 600) - time.time()
+                return await ctx.send(
+                    "This command is on cooldown. Try again in {:g}s".format(cooldown_time)
+                )
+
 
     @commands.group(name="backpack", autohelp=False)
     async def _backpack(self, ctx):
@@ -509,6 +757,7 @@ class Adventure(BaseCog):
         
     @_backpack.command(name="sellrarity")
     async def backpack_sellrarity(self, ctx, *, rarity: str):
+        """Sell all items of a certain rarity from your backpack"""
         if rarity.lower() not in ["normal", "rare", "epic", "legendary"]:
             return await ctx.send(
                 box(
@@ -540,7 +789,10 @@ class Adventure(BaseCog):
         await self._sell_items(ctx, item_list, c)
         
     async def _sell_items(self, ctx, lookup: list, c: Character):
-        item_str = box(humanize_list([f"{str(y)} - {y.owned}" for y in lookup]), lang="css")
+        item_str = humanize_list([f"{str(y)} - {y.owned}" for y in lookup])
+        # Max message length is 2000
+        if len(item_str) >= 1900:
+            item_str = box(item_str[:1900] + "...", lang="css")
         start_msg = await ctx.send(
             f"{self.E(ctx.author.display_name)}, do you want to sell these items? {item_str}"
         )
@@ -932,7 +1184,16 @@ class Adventure(BaseCog):
             await self.config.guild(ctx.guild).hero_cost.set(int(price))
             await ctx.tick()
         except ValueError:
-            await ctx.cross()
+            await ctx.send(f"Please use something that can convert to an integer...")
+
+    @adventureset.command()
+    async def classprice(self, ctx, *, price):
+        """[Admin] Set the price to change hero class"""
+        try:
+            await self.config.guild(ctx.guild).class_cost.set(int(price))
+            await ctx.tick()
+        except ValueError:
+            await ctx.send(f"Please use something that can convert to an integer...")
 
     @adventureset.command()
     @checks.is_owner()
@@ -1545,247 +1806,6 @@ class Adventure(BaseCog):
             )
         )
         await self._update_hero(user, c)
-
-    @commands.command()
-    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
-    async def heroclass(self, ctx, clz: str = None, action: str = None):
-        """This allows you to select a class if you are Level 10 or above.
-        For information on class use: `[p]heroclass "classname" info`
-        """
-        if not await self.allow_in_dm(ctx):
-            return await ctx.send("This command is not available in DM's on this bot.")
-
-        classes = {
-            "Wizard": {
-                "name": "Wizard",
-                "ability": False,
-                "desc": (
-                    "Wizards have the option to focus and add big bonuses to their magic, "
-                    "but their focus can sometimes go astray...\n"
-                    "The magic glyphs tattooed on their body are known to be bound with god, "
-                    "and can amplify the prayers.\n"
-                    "Use the focus command when attacking in an adventure."
-                ),
-            },
-            "Tinkerer": {
-                "name": "Tinkerer",
-                "ability": False,
-                "desc": (
-                    "Tinkerers can forge two different items into a device "
-                    "bound to their very soul.\n"
-                    "From time to time, Tinkerers will sharpen the weapons of the fighters or "
-                    "craft mana potions for the magicians, slightly increasing their damages.\n"
-                    "Use the forge command."
-                ),
-            },
-            "Berserker": {
-                "name": "Berserker",
-                "ability": False,
-                "desc": (
-                    "Berserkers have the option to rage and add big bonuses to attacks, "
-                    "but fumbles hurt.\n"
-                    "When arguing with an enemy, Bersekers can enter in a state of wild fury, "
-                    "that intimidates the enemy and makes the negotiation easier for the whole party.\n"
-                    "Use the rage command when attacking in an adventure."
-                ),
-            },
-            "Cleric": {
-                "name": "Cleric",
-                "ability": False,
-                "desc": (
-                    "Clerics can bless the entire group and add small bonus to each adventurer, "
-                    "but prayers can remain unanswered...\n"
-                    "Divine aura can radiate from Clerics while praying, increasing the critical chances and abilities of fighters and wizards.\n"
-                    "Use the bless command when praying in an adventure."
-                ),
-            },
-            "Ranger": {
-                "name": "Ranger",
-                "ability": False,
-                "desc": (
-                    "Rangers can gain a special pet, which can find items and give "
-                    "reward bonuses.\nUse the pet command to see pet options."
-                ),
-                "pet": {},
-                "forage": 0.0,
-            },
-            "Bard": {
-                "name": "Bard",
-                "ability": False,
-                "desc": (
-                    "Bards can perform to aid their comrades in diplomacy.\n"
-                    "Due to their natural intelligence, they learnt a little bit about magic "
-                    "and have a chance to decrease magic resistance with their melodious voices.\n"
-                    "Bards are also talented with daggers and can weaken physical resistance through precision incisions.\n"
-                    "Use the music command when being diplomatic in an adventure."
-                ),
-            },
-        }
-
-        if clz is None:
-            ctx.command.reset_cooldown(ctx)
-            await ctx.send(
-                (
-                    f"So you feel like taking on a class, **{self.E(ctx.author.display_name)}**?\n"
-                    "Available classes are: Tinkerer, Berserker, Wizard, Cleric, Ranger and Bard.\n"
-                    f"Use `{ctx.prefix}heroclass name-of-class` to choose one."
-                )
-            )
-
-        else:
-            clz = clz.title()
-            if clz in classes and action == "info":
-                ctx.command.reset_cooldown(ctx)
-                return await ctx.send(f"{classes[clz]['desc']}")
-            elif clz not in classes and action is None:
-                ctx.command.reset_cooldown(ctx)
-                return await ctx.send(f"{clz} may be a class somewhere, but not on my watch.")
-            bal = await bank.get_balance(ctx.author)
-            currency_name = await bank.get_currency_name(ctx.guild)
-            if str(currency_name).startswith("<"):
-                currency_name = "credits"
-            spend = 10000
-            class_msg = await ctx.send(
-                box(
-                    (
-                        f"This will cost {spend} {currency_name}. "
-                        f"Do you want to continue, {self.E(ctx.author.display_name)}?"
-                    ),
-                    lang="css",
-                )
-            )
-            broke = box(
-                f"You don't have enough {currency_name} to train to be a {clz.title()}.",
-                lang="css",
-            )
-            try:
-                c = await Character._from_json(self.config, ctx.author)
-            except Exception:
-                log.error("Error with the new character sheet", exc_info=True)
-                return
-            start_adding_reactions(class_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
-            pred = ReactionPredicate.yes_or_no(class_msg, ctx.author)
-            try:
-                await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
-            except asyncio.TimeoutError:
-                await self._clear_react(class_msg)
-                return
-
-            if not pred.result:
-                await class_msg.edit(
-                    content=box(
-                        (
-                            f"{self.E(ctx.author.display_name)} decided"
-                            f" to continue being a {c.heroclass['name']}."
-                        ),
-                        lang="css",
-                    )
-                )
-                return await self._clear_react(class_msg)
-            if bal < spend:
-                await class_msg.edit(content=broke)
-                return await self._clear_react(class_msg)
-            try:
-                await bank.withdraw_credits(ctx.author, spend)
-            except ValueError:
-                return await class_msg.edit(content=broke)
-
-            if clz in classes and action is None:
-                now_class_msg = (
-                    f"Congratulations, {self.E(ctx.author.display_name)}.\n"
-                    f"You are now a {classes[clz]['name']}."
-                )
-                if c.lvl >= 10:
-                    if c.heroclass["name"] == "Tinkerer" or c.heroclass["name"] == "Ranger":
-                        if c.heroclass["name"] == "Tinkerer":
-                            await self._clear_react(class_msg)
-                            await class_msg.edit(
-                                content=box(
-                                    (
-                                        f"{self.E(ctx.author.display_name)}, "
-                                        "you will lose your forged"
-                                        " device if you change your class.\nShall I proceed?"
-                                    ),
-                                    lang="css",
-                                )
-                            )
-                        else:
-                            await self._clear_react(class_msg)
-                            await class_msg.edit(
-                                content=box(
-                                    (
-                                        f"{self.E(ctx.author.display_name)}, "
-                                        "you will lose your pet "
-                                        "if you change your class.\nShall I proceed?"
-                                    ),
-                                    lang="css",
-                                )
-                            )
-                        start_adding_reactions(class_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
-                        pred = ReactionPredicate.yes_or_no(class_msg, ctx.author)
-                        try:
-                            await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
-                        except asyncio.TimeoutError:
-                            await self._clear_react(class_msg)
-                            return
-                        if pred.result:  # user reacted with Yes.
-                            if c.heroclass["name"] == "Tinkerer":
-                                tinker_wep = []
-                                for item in c.current_equipment():
-                                    if item.rarity == "forged":
-                                        c = await c._unequip_item(item)
-                                for name, item in c.backpack.items():
-                                    if item.rarity == "forged":
-                                        tinker_wep.append(item)
-                                if len(tinker_wep) >= 1:
-                                    for item in tinker_wep:
-                                        del c.backpack[item.name]
-                                    await self._update_hero(ctx.author, c)
-                                    await class_msg.edit(
-                                        content=box(
-                                            (
-                                                f"{humanize_list(tinker_wep)} has "
-                                                "run off to find a new master."
-                                            ),
-                                            lang="css",
-                                        )
-                                    )
-                            else:
-                                c.heroclass["ability"] = False
-                                c.heroclass["pet"] = {}
-                                c.heroclass = classes[clz]
-                                await self._update_hero(ctx.author, c)
-                                await self._clear_react(class_msg)
-                                await class_msg.edit(
-                                    content=box(
-                                        (
-                                            f"{self.E(ctx.author.display_name)} released their"
-                                            f" pet into the wild.\n"
-                                        ),
-                                        lang="css",
-                                    )
-                                )
-                            c.heroclass = classes[clz]
-                            await self._update_hero(ctx.author, c)
-                            await self._clear_react(class_msg)
-                            return await class_msg.edit(
-                                content=class_msg.content + box(now_class_msg, lang="css")
-                            )
-
-                        else:
-                            ctx.command.reset_cooldown(ctx)
-                            return
-                    else:
-                        c.heroclass = classes[clz]
-                        await self._update_hero(ctx.author, c)
-                        await self._clear_react(class_msg)
-                        return await class_msg.edit(content=box(now_class_msg, lang="css"))
-                else:
-                    ctx.command.reset_cooldown(ctx)
-                    await ctx.send(
-                        f"{self.E(ctx.author.display_name)}, you need "
-                        "to be at least level 10 to choose a class."
-                    )
 
     @commands.command()
     @commands.cooldown(rate=1, per=4, type=commands.BucketType.user)
