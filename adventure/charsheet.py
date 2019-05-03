@@ -179,6 +179,7 @@ class Character(Item):
 
     def __init__(self, **kwargs):
         self.name: str = kwargs.pop("name")
+        self.race: str = kwargs.pop("race")
         self.exp: int = kwargs.pop("exp")
         self.lvl: int = kwargs.pop("lvl")
         self.treasure: List[int] = kwargs.pop("treasure")
@@ -430,6 +431,8 @@ class Character(Item):
             pass
         if "name" not in data.keys():
             data["name"] = "active"
+        if "race" not in data.keys():
+            data["race"] = "human"
         balance = await bank.get_balance(user)
         equipment = {
             k: Item._from_json(v) if v else None
@@ -457,6 +460,7 @@ class Character(Item):
         # log.debug(data["items"]["backpack"])
         hero_data = {
             "name": data["name"],
+            "race": data["race"],
             "exp": data["exp"],
             "lvl": data["lvl"],
             "att": data["att"],
@@ -482,6 +486,7 @@ class Character(Item):
                 backpack[n] = i
         return { 
             "name": self.name, # should always have a name even fresh because we add one in _from_json
+            "race": self.race,
             "exp": self.exp,
             "lvl": self.lvl,
             "att": self.att,
