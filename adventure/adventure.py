@@ -5,6 +5,7 @@ import random
 import time
 import logging
 import os
+import re
 from typing import Optional
 
 from redbot.core import commands, bank, checks, Config
@@ -198,6 +199,7 @@ class Adventure(BaseCog):
         New hero:     `[p]hero new <name>`
         Change hero:  `[p]hero change <name>`
         Choose class: `[p]hero class <class> <info>`
+        Kill hero:    `[p]hero kill <name>`
         """
         if not await self.allow_in_dm(ctx):
             return await ctx.send("This command is not available in DM's on this bot.")
@@ -243,7 +245,7 @@ class Adventure(BaseCog):
                     msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}} | {heroclass}{spacer:>{9-len(heroclass)}} | {herolvl}" 
                     if hero_name == current_hero:
                         msg+= f"  **"
-            msg+= f"** - Your current hero"
+            msg+= f"\n** - Your current hero"
             if count == 0:
                 return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
             for page in pagify(msg):
@@ -260,6 +262,8 @@ class Adventure(BaseCog):
             return await ctx.send(f"It costs {cost} {currency_name} to recruit a new hero. You cannot afford it.")
 
         raw = await self.config.user(ctx.author).get_raw()
+        if len(raw.keys()) > 10:  # includes active
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, you have 10 heroes already. To recruit a new hero you must kill another...")
         if name:
             name = name.title()
         else:
@@ -273,12 +277,13 @@ class Adventure(BaseCog):
             if not reply:
                 return
             else:
-                # stops current_name = raw["name"] line from returning an actual character
-                if reply.content.lower() in "name":
-                    return await ctx.send(f"{self.E(ctx.author.display_name)}, you cannot call your hero 'name'.")
                 name = reply.content.title()
         if name in raw.keys():
             return await ctx.send(f"{self.E(ctx.author.display_name)}, you already have a hero with that name.")
+        if not re.match("^[A-Za-z ]", name) or len(name) > 15:
+            msg = (f"{self.E(ctx.author.display_name)}, no special characters please (A-Z, a-z and spaces only). 15 character max.\n"
+                   f"Poor {name}, can you imagine being called that all their life?") 
+            return await ctx.send(msg)
 
         # all heroes should be active but when first deployed they won't have a name, we need to set it
         try:
@@ -350,15 +355,87 @@ class Adventure(BaseCog):
             return
         await ctx.send(f"{self.E(ctx.author.display_name)}, your new hero **{name}** is ready for adventures!")
 
+    @_hero.command(name="kill", aliases=["delete", "del", "rem", "remove"])
+    async def hero_kill(self, ctx, *, name: str):
+        """Kills one of your heroes forver (can never be resurrected)"""
+        raw = await self.config.user(ctx.author).get_raw()
+        if len(raw.keys()) <= 10: 
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, you can have up to 10 heroes. I will not kill one in vain.")
+        name = name.title()
+        if name in ["Active", raw["active"]["name"]]:
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, you cannot kill your current hero.")
+        hero_list = []
+        for key in raw.keys():
+            if name in key:
+                hero_list.append(key)
+        if len(hero_list) == 0:
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, you do not have a hero with that name.")
+        elif len(hero_list) > 1:
+            log.debug(hero_list)
+            return await ctx.send(f"{self.E(ctx.author.display_name)}, please be more specific.")
+        else:
+            hero_name = hero_list[0]
+            change_msg = await ctx.send(box(
+                        (
+                            f"{hero_name} will cease to exist, forever... are you sure you want to do this?"
+                        ),
+                        lang="css",)
+                    )
+            start_adding_reactions(change_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+            pred = ReactionPredicate.yes_or_no(change_msg, ctx.author)
+            try:
+                await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+            except asyncio.TimeoutError:
+                await self._clear_react(change_msg)
+                return
+            if not pred.result:
+                await change_msg.edit(
+                    content=box(
+                        (
+                            f"{hero_name} started sweating... but knew you wouldn't do it."
+                        ),
+                        lang="css",
+                    )
+                )
+                return await self._clear_react(change_msg)
+            await asyncio.sleep(1)
+            new_msg = await ctx.send(box((f"Really, really sure?"),lang="css",))
+            start_adding_reactions(new_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+            pred = ReactionPredicate.yes_or_no(new_msg, ctx.author)
+            try:
+                await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+            except asyncio.TimeoutError:
+                await self._clear_react(new_msg)
+                return
+            if not pred.result:
+                await new_msg.edit(
+                    content=box(
+                        (
+                            f"{hero_name} thanks you, merciful one; and will try harder from now on!"
+                        ),
+                        lang="css",
+                    )
+                )
+                return await self._clear_react(new_msg)
+            del raw[hero_name]
+            try:
+                await self.config.user(ctx.author).set(raw)
+            except Exception:
+                log.error("Error creating new hero", exc_info=True)
+                return
+            await ctx.send(box((f"{hero_name} has gone forever..."),lang="css",))
+
     @_hero.command(name="change")
-    @commands.cooldown(rate=1, per=30, type=commands.BucketType.user)
+    @commands.cooldown(rate=1, per=3600, type=commands.BucketType.user)
     async def hero_change(self, ctx, *, name: str):
         """Allows you to switch between your existing heroes"""
         raw = await self.config.user(ctx.author).get_raw()
         name = name.title()
         if name in ["Active", raw["active"]["name"]]:
+            ctx.command.reset_cooldown(ctx)
             return await ctx.send(f"{self.E(ctx.author.display_name)}, your current hero ***is*** {name}!")
         if name not in raw.keys():
+            ctx.command.reset_cooldown(ctx)
             return await ctx.send(f"{self.E(ctx.author.display_name)}, you do not have a hero with that name.")
         try:
             current_name = raw["active"]["name"]
@@ -372,6 +449,7 @@ class Adventure(BaseCog):
             return await ctx.send(msg)
         except Exception:
             log.error("Error changing hero", exc_info=True)
+            ctx.command.reset_cooldown(ctx)
             return await ctx.send(f"Sorry about this, {self.E(ctx.author.display_name)}... but we couldn't change your hero.")
 
     @_hero.command(name="class")
@@ -954,7 +1032,7 @@ class Adventure(BaseCog):
                         else:
                             item.owned = 1
                             buy_user.backpack[item.name] = item
-                        await self.config.user(buyer).set(buy_user._to_json())
+                        await self._update_hero(buyer, buy_user)
                         await trade_msg.edit(
                             content=(
                                 box(
@@ -2347,7 +2425,7 @@ class Adventure(BaseCog):
             elif spend == "intelligence":
                 c.skill["pool"] -= amount
                 c.skill["int"] += amount
-            await self.config.user(ctx.author).set(c._to_json())
+            await self._update_hero(ctx.author, c)
             await ctx.send(
                 f"{self.E(ctx.author.display_name)}, you "
                 f"permanently raised your {spend} value by {amount}."
@@ -2922,15 +3000,15 @@ class Adventure(BaseCog):
                 extra_challenge, plural = await self._plural(challenge, new_amount)
                 session.amount += new_amount
                 added = True
-                attack = f"attack" if new_amount > 1 else f"attacks"
+                attack_str = f"attack" if new_amount > 1 else f"attacks"
                 added_msg += (f"**Watch out!**\n"
-                            f"**{new_amount} more {extra_challenge}{plural}** {attack} the group from behind!")
+                            f"**{new_amount} more {extra_challenge}{plural}** {attack_str} the group from behind!")
             await ctx.send(added_msg)
             if added:  # pause for dramatic effect :joy:
                 await asyncio.sleep(2)
 
-        hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[challenge_attrib][0] * session.amount
-        dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[challenge_attrib][1] * session.amount
+        hp = int(self.MONSTERS[challenge]["hp"] * self.ATTRIBS[challenge_attrib][0] * session.amount)
+        dipl = int(self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[challenge_attrib][1] * session.amount)
 
         slain = (attack + magic) >= hp
         persuaded = diplomacy >= dipl
