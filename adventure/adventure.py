@@ -231,8 +231,12 @@ class Adventure(BaseCog):
                     max_length = len(hero_name)
                 if hero_name.lower() in "active":
                     current_hero = hero_charsheet["name"]
+                else:
+                    count += 1
+            if count == 0:
+                return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
             spacer = " "
-            msg += f"\nName {spacer:>{max_length-4}} | Race {spacer:>{3}} | Class {spacer:>{3}} | Level"
+            msg += f"\nName {spacer:>{max_length-4}}| Race {spacer:>{4}}| Class {spacer:>{3}}| Level"
             for hero_name, hero_charsheet in raw.items():
                 if hero_name not in "active":
                     # default used to be "class" instead of heroclass for some reason
@@ -244,18 +248,15 @@ class Adventure(BaseCog):
                         heroclass = hero_charsheet["heroclass"]["name"] if "heroclass" in hero_charsheet else hero_charsheet["class"]["name"]
                         herolvl = hero_charsheet["lvl"]
                         race = hero_charsheet["race"]
-                    count += 1
-                    msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}} | {race}{spacer:>{8-len(race)}} | {heroclass}{spacer:>{9-len(heroclass)}} | {herolvl}" 
+                    msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}}| {race.title()}{spacer:>{9-len(race)}}| {heroclass}{spacer:>{9-len(heroclass)}}| {herolvl}" 
                     if hero_name == current_hero:
                         msg+= f"  **"
             msg+= f"\n** - Your current hero"
-            if count == 0:
-                return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
             for page in pagify(msg):
                 await ctx.send(box(page, lang="css"))
 
     @_hero.command(name="new")
-    async def hero_new(self, ctx, *, name: str = None, race: str = None):
+    async def hero_new(self, ctx, *, name: str = None):
         """Create a new hero"""
         cost = 50000  #default
         currency_name = await bank.get_currency_name(ctx.author.guild)
@@ -301,9 +302,10 @@ class Adventure(BaseCog):
                 current_name = "active"
                 character = raw
                 character["name"] = "active"
+            msg = (f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.\n")
             # default we set for everyone, make them change it so it has a unique name
             if current_name == "active":
-                await ctx.send(f"{self.E(ctx.author.display_name)}, please enter a name for your current hero:")
+                await ctx.send(f"{self.E(ctx.author.display_name)}, please enter a name for your **current** hero:")
                 try:
                     reply = await ctx.bot.wait_for(
                         "message", check=MessagePredicate.same_context(ctx), timeout=30
@@ -320,42 +322,37 @@ class Adventure(BaseCog):
 
                 await ctx.send(f"{self.E(ctx.author.display_name)}, {current_name} can join any race they like as an honorary member... which race should they pick?")
                 try:
-                    race = await ctx.bot.wait_for(
+                    reply = await ctx.bot.wait_for(
                         "message", check=MessagePredicate.same_context(ctx), timeout=30
                     )
                 except asyncio.TimeoutError:
                     return
-                if not race:
+                if not reply:
                     return
                 else:
-                    if race.content.lower() not in ["human", "elf", "valkyrie", "dwarf", "fairy"]:
+                    if reply.content.lower() not in ["human", "elf", "valkyrie", "dwarf", "fairy"]:
                         return await ctx.send(f"Only the human, elf, valkyrie, dwarf and fairy kingdoms like our adventures (for now).")
-                    current_race = race.content.lower()
-                    character["race"] = current_race
-
-            msg = (f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.\n"
-                   f"{current_name} became an honorary member of the {race} kingdom.")
+                    old_race = reply.content.lower()
+                    character["race"] = old_race
+                    msg = (f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.\n"
+                           f"{current_name} became an honorary member of the {old_race} kingdom.")
             await ctx.send(msg)
             raw[current_name] = character
         except Exception:
             log.error("Error saving old hero details", exc_info=True)
             return 
         
-        if race:
-            race = race.lower()
+        await ctx.send(f"{self.E(ctx.author.display_name)}, what race should our **new** adventurer come from?")
+        try:
+            reply = await ctx.bot.wait_for(
+                "message", check=MessagePredicate.same_context(ctx), timeout=30
+            )
+        except asyncio.TimeoutError:
+            return
+        if not reply:
+            return
         else:
-            await ctx.send(f"{self.E(ctx.author.display_name)}, what race should our adventurer come from?")
-            try:
-                reply = await ctx.bot.wait_for(
-                    "message", check=MessagePredicate.same_context(ctx), timeout=30
-                )
-            except asyncio.TimeoutError:
-                return
-            if not reply:
-                return
-            else:
-                race = reply.content.lower()
-
+            race = reply.content.lower()
         if race not in ["human", "elf", "valkyrie", "dwarf", "fairy"]:
             return await ctx.send(f"Only the human, elf, valkyrie, dwarf and fairy kingdoms like our adventures (for now).")
 
@@ -3034,6 +3031,16 @@ class Adventure(BaseCog):
                 new_talk += c.skill['cha'] + c.cha + 10
             if new_dmg >= self.MONSTERS[challenge]["hp"] or new_talk >= self.MONSTERS[challenge]["dipl"]:
                 new_amount = max(int(new_dmg/self.MONSTERS[challenge]["hp"]), int(new_talk/self.MONSTERS[challenge]["dipl"]))
+                # can happen randomly, let's not add another boss if they can't take out first
+                if self.MONSTERS[challenge]["boss"]:
+                    old_msg = 0
+                    old_talk = 0
+                    for user in session.participants:
+                        c = await Character._from_json(self.config, user)
+                        old_dmg += max(c.att + c.skill['att'], c.int + c.skill['int']) + 10 
+                        old_talk += c.skill['cha'] + c.cha + 10
+                    if max(old_dmg/self.MONSTERS[challenge]["hp"], old_talk/self.MONSTERS[challenge]["dipl"]) < 0.75:
+                        new_amount -= 1
                 extra_challenge, plural = await self._plural(challenge, new_amount)
                 session.amount += new_amount
                 added = True
