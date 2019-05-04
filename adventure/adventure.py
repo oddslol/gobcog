@@ -2948,7 +2948,7 @@ class Adventure(BaseCog):
                 name, item = random.choice(list(c.backpack.items()))
                 item.owned -= 1
                 price = await self._sell(user, item)
-                await bank.deposit_credits(ctx.author, price)
+                await bank.deposit_credits(user, price)
                 sold_msg = (
                     f"{self.E(user.display_name)} sold their "
                     f"{item} for {price} {currency_name}.\n"
