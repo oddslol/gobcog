@@ -2756,6 +2756,10 @@ class Adventure(BaseCog):
         return (rewards, participants)
 
     async def _choice(self, ctx, adventure_txt, adventure_msg):
+        hp_estim_precision = 0
+        cha_estim_precision = 0
+        hp_estimate_list_names = []
+        cha_estimate_list_names = []
         session = self._sessions[ctx.guild.id]
         if session.attribute[1] in ['a', 'e', 'i', 'o', 'u']:
             prefix = "an" if session.amount == 1 else str(session.amount)
@@ -2819,7 +2823,50 @@ class Adventure(BaseCog):
         session.message_id = adventure_msg.id
         start_adding_reactions(adventure_msg, self._adventure_actions if owner_challenge else self._adventure_run, ctx.bot.loop)
 
-        found_msg = await ctx.send(f"Your group encountered **{prefix}{session.attribute} {challenge}{plural}**!\n"
+        estimate = "\n"
+        for user in session.fight + session.magic + session.talk + session.pray:
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                return
+            if c.race == "elf" or c.race == "fairy":
+                roll = random.randint(1, 100)
+                chance = max(1, int(c.lvl * 25 / 50))
+                if roll in range(1, chance):
+                    if c.race == "elf":
+                        cha_estim_precision += int(c.lvl / 2)
+                        cha_estimate_list_names.append(self.E(user.display_name))
+                    else:
+                        hp_estim_precision += int(c.lvl / 2)
+                        hp_estimate_list_names.append(self.E(user.display_name))
+        if len(cha_estimate_list_names) > 0:
+            dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[session.attribute][1] * session.amount
+            cha_estim_error = 30 - cha_estim_precision #worst estimation leads to max 30% error
+            min_cha_estimate = int(dipl * (1 - (cha_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
+            max_cha_estimate = int(dipl * (1 + (cha_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
+            attrib = "s" if len(cha_estimate_list_names) == 1 else ""
+            estimate += (
+                f"{bold(humanize_list(cha_estimate_list_names))} know{attrib} everything about beauty and harmony, "
+                f"and gauge{attrib} the enemy's charisma as **{min_cha_estimate} - {max_cha_estimate} diplomacy**.\n"
+            )
+        if len(hp_estimate_list_names) > 0:
+            hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[session.attribute][0] * session.amount
+            hp_estim_error = 30 - hp_estim_precision
+            min_hp_estimate = int(hp * (1 - (hp_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
+            max_hp_estimate = int(hp * (1 + (hp_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
+            if len(hp_estimate_list_names) == 1:
+                attrib1 = "s"
+                attrib2 = "his"
+            else:
+                attrib1 = ""
+                attrib2 = "their"
+            estimate += (
+                f"{bold(humanize_list(hp_estimate_list_names))} draw{attrib1} upon {attrib2} supernatural knowledge, "
+                f"to estimate the enemy's strength as **{min_hp_estimate} - {max_hp_estimate} hp**.\n"
+            )
+
+        found_msg = await ctx.send(f"Your group encountered **{prefix}{session.attribute} {challenge}{plural}**!{estimate}"
             f"What will you do and will any other heroes help your cause?\n"
             f"Heroes have {timeout}s to change their strategy or join the fight via reactions above!")
         timer = await self._adv_countdown(ctx, session.timer, "Time remaining: ")
@@ -3182,15 +3229,21 @@ class Adventure(BaseCog):
 
             if not slain and not persuaded:
                 users = fight_list + magic_list + talk_list + pray_list + run_list + fumblelist
+                escape, escape_txt, remaining_users = await self._escape(users)
                 if len(run_name_list) >= 1:
                     result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
-                repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
-                options = [
-                    f"No amount of diplomacy or valiant fighting could save you.\n",
-                    f"This challenge was too much for one hero.\n",
-                    f"You tried your best, but the group couldn't succeed at their attempt.\n"
-                ]
-                text = random.choice(options)
+                if escape:
+                    text = escape_txt
+                    if len(remaining_users) > 0:
+                        repair_list.append([remaining_users, " to repair their gear.\n", " to have their gear repaired...\n"])
+                else:
+                    repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
+                    options = [
+                        f"No amount of diplomacy or valiant fighting could save you.\n",
+                        f"This challenge was too much for one hero.\n",
+                        f"You tried your best, but the group couldn't succeed at their attempt.\n"
+                    ]
+                    text = random.choice(options)
         else:
             if slain and persuaded:
                 if len(pray_list) > 0:
@@ -3273,15 +3326,21 @@ class Adventure(BaseCog):
 
             if not slain and not persuaded:
                 users = fight_list + magic_list + talk_list + pray_list + run_list + fumblelist
+                escape, escape_txt, remaining_users = await self._escape(users)
                 if len(run_name_list) >= 1:
                     result_msg += (f"\n{bold(humanize_list(run_name_list))} wanted to run away but froze in fear.")
-                repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
-                options = [
-                    f"No amount of diplomacy or valiant fighting could save you.\n",
-                    f"This challenge was too much for the group.\n",
-                    f"You tried your best, but couldn't succeed.\n"
-                ]
-                text = random.choice(options)
+                if escape:
+                    text = escape_txt
+                    if len(remaining_users) > 0:
+                        repair_list.append([remaining_users, " to repair their gear.\n", " to have their gear repaired...\n"])
+                else:
+                    repair_list.append([users, " to repair their gear.\n", " to have their gear repaired...\n"])
+                    options = [
+                        f"No amount of diplomacy or valiant fighting could save you.\n",
+                        f"This challenge was too much for one hero.\n",
+                        f"You tried your best, but the group couldn't succeed at their attempt.\n"
+                    ]
+                    text = random.choice(options)
 
         await ctx.send(result_msg + "\n" + text)
         # Failing basilisk with the correct item would lead to 2 lists and allows for more in future
@@ -3289,6 +3348,44 @@ class Adventure(BaseCog):
             await self.repair_users(ctx, repairs[0], repairs[1], repairs[2])
         await self._data_check(ctx)
         session.participants = set(fight_list + magic_list + talk_list + pray_list + run_list + fumblelist)
+
+    async def _escape(self, users):
+        escape_chance = 0
+        escape_users = []
+        pegasus_users = []
+        escape = False
+        escape_txt = ""
+        random.shuffle(users)
+        for user in users:
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                continue
+            if c.race == "valkyrie":
+                roll = random.randint(1, 100)
+                chance = max(1, int(c.lvl * 25 / 50))
+                if roll in range(1, chance):
+                    escape_chance += c.lvl * 2
+                    escape_users.append(self.E(user.display_name))
+        if len(escape_users) > 0:
+            pegasus_nb = min(max(1, round(escape_chance /100 * len(users))), len(users))
+            escape = True
+            if len(escape_users) == 1:
+                attrib1 = "her"
+                attrib2 = ""
+                attrib3 = "us"
+            else:
+                attrib1 = "their"
+                attrib2 = "s"
+                attrib3 = "i"
+            escape_txt += f"{humanize_list(escape_users)} called {pegasus_nb} Pegas{attrib3} with {attrib1} magic horn{attrib2}, right in time to escape!\n"
+            while pegasus_nb > 0 and users:  # can't pop if list is empty
+                pegasus_nb -= 1
+                pegasus_users.append(self.E(users.pop().display_name))
+            attrib4 = ", while the remaining adventurers fought bravely to delay the enemy" if len(users) > 0 else ""
+            escape_txt += f"{humanize_list(pegasus_users)} quickly mounted the mighty animal{attrib2} and escaped{attrib4}.\n" 
+        return escape, escape_txt, users
 
     async def repair_users(self, ctx, users, repair_msg = " to repair their gear.\n", fail_repair_msg = " to have their gear repaired...\n"):
         currency_name = await bank.get_currency_name(ctx.author.guild)
@@ -4117,8 +4214,8 @@ class Adventure(BaseCog):
             modif = 0.5
         xp = max(1, round(amount))
         cp = max(1, round(amount * modif))
+        xp_bonus, cp_bonus, phrase = await self._reward_bonus(ctx, userlist, xp, cp)
         rewards_list = []
-        phrase = ""
         for user in userlist:
             self._rewards[user.id] = {}
             try:
@@ -4132,8 +4229,8 @@ class Adventure(BaseCog):
                 and c.heroclass["name"] == "Ranger"
                 and c.heroclass["pet"]
             ):
-                self._rewards[user.id]["xp"] = int(xp * c.heroclass["pet"]["bonus"])
-                self._rewards[user.id]["cp"] = int(cp * c.heroclass["pet"]["bonus"])
+                self._rewards[user.id]["xp"] = int(xp_bonus * c.heroclass["pet"]["bonus"])
+                self._rewards[user.id]["cp"] = int(cp_bonus * c.heroclass["pet"]["bonus"])
                 percent = round((c.heroclass["pet"]["bonus"] - 1.0) * 100)
                 phrase = (
                     f"\n{bold(self.E(user.display_name))} received a {bold(str(percent))}% "
@@ -4141,8 +4238,8 @@ class Adventure(BaseCog):
                 )
 
             else:
-                self._rewards[user.id]["xp"] = xp
-                self._rewards[user.id]["cp"] = cp
+                self._rewards[user.id]["xp"] = xp_bonus
+                self._rewards[user.id]["cp"] = cp_bonus
             if special is not False:
                 self._rewards[user.id]["special"] = special
             else:
@@ -4161,20 +4258,60 @@ class Adventure(BaseCog):
             types = [" normal", " rare", "n epic", " legendary"]
             chest_type = types[special.index(1)]
             phrase += (
-                f"\n{bold(to_reward)} {word} been awarded {xp} xp and found {cp} {currency_name}. "
+                f"\n{bold(to_reward)} {word} been awarded {xp_bonus} xp and found {cp_bonus} {currency_name}. "
                 f"You also secured **a{chest_type} treasure chest**!"
             )
         elif special is not False and sum(special) > 1:
             phrase += (
-                f"\n{bold(to_reward)} {word} been awarded {xp} xp and found {cp} {currency_name}. "
+                f"\n{bold(to_reward)} {word} been awarded {xp_bonus} xp and found {cp_bonus} {currency_name}. "
                 f"You also secured **several treasure chests**!"
             )
         else:
             phrase += (
-                f"\n{bold(to_reward)} {word} been awarded {xp} xp and found {cp} {currency_name}."
+                f"\n{bold(to_reward)} {word} been awarded {xp_bonus} xp and found {cp_bonus} {currency_name}."
             )
         return phrase
 
+    async def _reward_bonus(self, ctx, userlist, xp, cp):
+        phrase = ""
+        xp_bonus = 0
+        cp_bonus = 0
+        xp_bonus_list_names = []
+        cp_bonus_list_names = []
+        for user in userlist:
+            try:
+                c = await Character._from_json(self.config, user)
+            except Exception:
+                log.error("Error with the new character sheet", exc_info=True)
+                return
+            if c.race == "dwarf" or c.race == "human":
+                roll = random.randint(1, 100)
+                chance = max(1, int(c.lvl * 25 / 50))
+                if roll in range(1, chance):
+                    bonus = int(1.5 * chance)
+                    if c.race == "dwarf":
+                        cp_bonus += bonus
+                        cp_bonus_list_names.append(self.E(user.display_name))
+                    else:
+                        xp_bonus += bonus
+                        xp_bonus_list_names.append(self.E(user.display_name))
+        if len(xp_bonus_list_names) > 0:
+            bonus = max(1, int(xp * min(100, xp_bonus) / 100))
+            xp += bonus        
+            phrase += (
+                f"\n{bold(humanize_list(xp_bonus_list_names))} led this battle with great panache... "
+                f"*[+{bonus} xp each!]*"
+            )
+        if len(cp_bonus_list_names) > 0:
+            bonus = max(1, int(cp * min(100, cp_bonus) / 100))
+            cp += bonus
+            currency_name = await bank.get_currency_name(ctx.guild)
+            phrase += (
+                f"\n{bold(humanize_list(cp_bonus_list_names))} carried out a thorough search of the place... "
+                f"*[+{bonus} {currency_name} each!]*"
+            )
+        return xp, cp, phrase
+                               
     @staticmethod
     async def _sell(user, item: Item):
         if isinstance(item, tuple):
