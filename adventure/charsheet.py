@@ -446,11 +446,10 @@ class Character(Item):
     async def _from_json(cls, config: Config, user: discord.Member):
         """Return a Character object from config and user"""
         data = await config.user(user).all()
-        try:
+        # I don't understand how "active" is in keys when it's not in json... but if exp is there
+        # it's an old hero and we need to use that. Soon as we have an "active" hero, exp will have been deleted
+        if "exp" not in data.keys():
             data = data["active"]
-        # doesn't break current heroes - pythonic view of ask for forgiveness
-        except:
-            pass
         if "name" not in data.keys():
             data["name"] = "active"
         if "race" not in data.keys():

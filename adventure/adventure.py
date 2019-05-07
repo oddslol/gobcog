@@ -196,6 +196,11 @@ class Adventure(BaseCog):
     async def _update_hero(self, user: discord.Member, c: Character, hero_name: str = "active"):
         raw = await self.config.user(user).get_raw()
         raw[hero_name] = c._to_json()
+        old_char = ["int", "att", "cha", "exp", "lvl", "treasure", "items", "backpack", "loadouts", "heroclass", "skill"]
+        if any([x for x in old_char if x in raw.keys()]):
+            for key in old_char:
+                if key in raw.keys():
+                    del raw[key]
         try:
             async with self.get_lock(c.user):
                 return await self.config.user(user).set(raw)
@@ -222,17 +227,8 @@ class Adventure(BaseCog):
                 log.error("Error with the new character sheet", exc_info=True)
                 return
             msg = f"{self.E(ctx.author.display_name)}, these are all your heroes:"
+            await self._update_hero(ctx.author, c)
             raw = await self.config.user(ctx.author).get_raw()
-            # Heroes aren't setup yet but they will be as soon as they do literally anything, no need for custom msg
-            if "active" not in raw.keys():  
-                return
-            old_char = ["int", "att", "cha", "exp", "lvl", "treasure", "items", "backpack", "loadouts", "heroclass", "skill"]
-            if any([x for x in old_char if x in raw.keys()]):
-                raw["active"] = c._to_json()
-                for key in old_char:
-                    if key in raw.keys():
-                        del raw[key]
-                await self.config.user(ctx.author).set(raw)
             # To be improved down the line with stats of current heroes?
             current_hero = ""
             count = 0
@@ -247,7 +243,7 @@ class Adventure(BaseCog):
             if count == 0:
                 return await ctx.send(f"{bold(self.E(ctx.author.display_name))}, you only have the one hero.")
             spacer = " "
-            msg += f"\nName {spacer:>{max_length-4}}| Race {spacer:>{4}}| Class {spacer:>{3}}| Level"
+            msg += f"\nName {spacer:>{max_length-4}}| Race {spacer:>{4}}| Class {spacer:>{4}}| Level"
             for hero_name, hero_charsheet in raw.items():
                 if hero_name not in "active":
                     # default used to be "class" instead of heroclass for some reason
@@ -259,7 +255,7 @@ class Adventure(BaseCog):
                         heroclass = hero_charsheet["heroclass"]["name"] if "heroclass" in hero_charsheet else hero_charsheet["class"]["name"]
                         herolvl = hero_charsheet["lvl"]
                         race = hero_charsheet["race"]
-                    msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}}| {race.title()}{spacer:>{9-len(race)}}| {heroclass}{spacer:>{9-len(heroclass)}}| {herolvl}" 
+                    msg += f"\n{hero_name}{spacer:>{max_length-len(hero_name)+1}}| {race.title()}{spacer:>{9-len(race)}}| {heroclass}{spacer:>{10-len(heroclass)}}| {herolvl}" 
                     if hero_name == current_hero:
                         msg+= f"  **"
             msg+= f"\n** - Your current hero"
@@ -268,14 +264,22 @@ class Adventure(BaseCog):
 
     @_hero.command(name="new")
     async def hero_new(self, ctx, *, name: str = None):
-        """Create a new hero"""
+        """Create a new hero
+        They can be from any of the following races: Human, Dwarf, Elf, Valkyrie, Fairy
+        """
         cost = 50000  #default
         currency_name = await bank.get_currency_name(ctx.author.guild)
         if await self.config.guild(ctx.guild).hero_cost():
             cost = await self.config.guild(ctx.guild).hero_cost()
         if not await bank.can_spend(ctx.author, cost):
             return await ctx.send(f"It costs {cost} {currency_name} to recruit a new hero. You cannot afford it.")
-
+        # saves current hero
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        await self._update_hero(ctx.author, c)
         raw = await self.config.user(ctx.author).get_raw()
         if len(raw.keys()) > 10:  # includes active
             return await ctx.send(f"{self.E(ctx.author.display_name)}, you have 10 heroes already. To recruit a new hero you must kill another...")
@@ -331,7 +335,9 @@ class Adventure(BaseCog):
                     current_name = reply.content.title()
                     character["name"] = current_name
 
-                await ctx.send(f"{self.E(ctx.author.display_name)}, {current_name} can join any race they like as an honorary member... which race should they pick?")
+                race_pick = (f"{self.E(ctx.author.display_name)}, {current_name} can join any race they like as an honorary member... which race should they pick?\n"
+                            f"*(Only the human, elf, valkyrie, dwarf and fairy kingdoms like our adventures (for now))*")
+                await ctx.send(race_pick)
                 try:
                     reply = await ctx.bot.wait_for(
                         "message", check=MessagePredicate.same_context(ctx), timeout=30
@@ -342,7 +348,7 @@ class Adventure(BaseCog):
                     return
                 else:
                     if reply.content.lower() not in ["human", "elf", "valkyrie", "dwarf", "fairy"]:
-                        return await ctx.send(f"Only the human, elf, valkyrie, dwarf and fairy kingdoms like our adventures (for now).")
+                        return await ctx.send(f"The {reply.content.lower()}s don't like our adventures.")
                     old_race = reply.content.lower()
                     character["race"] = old_race
                     msg = (f"{self.E(ctx.author.display_name)}, you current hero has been saved as {current_name}.\n"
@@ -353,7 +359,9 @@ class Adventure(BaseCog):
             log.error("Error saving old hero details", exc_info=True)
             return 
         
-        await ctx.send(f"{self.E(ctx.author.display_name)}, what race should our **new** adventurer come from?")
+        race_new = (f"{self.E(ctx.author.display_name)}, what race should our **new** adventurer come from?\n"
+                    f"*(Only the human, elf, valkyrie, dwarf and fairy kingdoms like our adventures (for now))*")
+        await ctx.send(race_new)
         try:
             reply = await ctx.bot.wait_for(
                 "message", check=MessagePredicate.same_context(ctx), timeout=30
@@ -365,7 +373,7 @@ class Adventure(BaseCog):
         else:
             race = reply.content.lower()
         if race not in ["human", "elf", "valkyrie", "dwarf", "fairy"]:
-            return await ctx.send(f"Only the human, elf, valkyrie, dwarf and fairy kingdoms like our adventures (for now).")
+            return await ctx.send(f"The {reply.content.lower()}s don't like our adventures.")
 
         recruit_msg = (
                         f"{self.E(ctx.author.display_name)}, it costs {cost} {currency_name} to recruit {name} to your cause.\n"
