@@ -16,7 +16,7 @@ from redbot.core.utils.common_filters import filter_various_mentions
 from redbot.core.utils.predicates import MessagePredicate, ReactionPredicate
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS, start_adding_reactions
 
-from .charsheet import Character, Item, GameSession, AdventureGroup
+from .charsheet import Character, Item, GameSession, AdventureGroup, parse_timedelta
 
 
 BaseCog = getattr(commands, "Cog", object)
@@ -59,6 +59,7 @@ class Adventure(BaseCog):
         self._sessions = {}
         self._groups = {}
         self.tasks = []
+        self.locks = {}
 
         self.config = Config.get_conf(self, 2710801001, force_registration=True)
 
@@ -97,7 +98,15 @@ class Adventure(BaseCog):
         
         default_user = { "active" : self.default_character }
 
-        default_guild = {"cart_channels": [], "god_name": "", "cart_name": "", "embed": True, "hero_cost": 50000, "class_cost": 10000}
+        default_guild = {
+            "cart_channels": [], 
+            "god_name": "", 
+            "cart_name": "",
+            "cart_timeout": 10800,
+            "embed": True, 
+            "hero_cost": 50000, 
+            "class_cost": 10000
+        }
         default_global = {"god_name": "Herbert", "cart_name": "Hawl's brother", "theme": "default"}
 
         self.RAISINS: list = None
@@ -188,7 +197,8 @@ class Adventure(BaseCog):
         raw = await self.config.user(user).get_raw()
         raw[hero_name] = c._to_json()
         try:
-            return await self.config.user(user).set(raw)
+            async with self.get_lock(c.user):
+                return await self.config.user(user).set(raw)
         except Exception:
             log.error("Error saving hero details", exc_info=True)
             return    
@@ -218,6 +228,7 @@ class Adventure(BaseCog):
                 return
             old_char = ["int", "att", "cha", "exp", "lvl", "treasure", "items", "backpack", "loadouts", "heroclass", "skill"]
             if any([x for x in old_char if x in raw.keys()]):
+                raw["active"] = c._to_json()
                 for key in old_char:
                     if key in raw.keys():
                         del raw[key]
@@ -734,6 +745,10 @@ class Adventure(BaseCog):
                     "This command is on cooldown. Try again in {:g}s".format(cooldown_time)
                 )
 
+    def get_lock(self, member: discord.Member):
+        if member.id not in self.locks:
+            self.locks[member.id] = asyncio.Lock()
+        return self.locks[member.id]
 
     @commands.group(name="backpack", autohelp=False)
     async def _backpack(self, ctx):
@@ -798,9 +813,6 @@ class Adventure(BaseCog):
                             ),
                             lang="css",
                         )
-                    c = await c._equip_item(item, True)
-                    # log.info(c)
-                    await self._update_hero(ctx.author, c)
                     current_stats = box(
                         (
                             f"{self.E(ctx.author.display_name)}'s new stats: "
@@ -811,6 +823,8 @@ class Adventure(BaseCog):
                         lang="css",
                     )
                     await ctx.send(equip_msg + current_stats)
+                    c = await c._equip_item(item, True)
+                    await self._update_hero(ctx.author, c)
 
     @_backpack.command(name="equip")
     async def backpack_equip(self, ctx, *, equip_item: str):
@@ -1051,7 +1065,7 @@ class Adventure(BaseCog):
             if pred.result:  # buyer reacted with Yes.
                 try:
                     if await bank.can_spend(buyer, asking):
-                        bal = await bank.transfer_credits(buyer, ctx.author, asking)
+                        await bank.transfer_credits(buyer, ctx.author, asking)
                         c.backpack[item.name].owned -= 1
                         if c.backpack[item.name].owned <= 0:
                             del c.backpack[item.name]
@@ -1297,12 +1311,14 @@ class Adventure(BaseCog):
         pass
 
     @adventureset.command()
+    @checks.admin_or_permissions(administrator=True)
     async def god(self, ctx, *, name):
         """[Admin] Set the server's name of the god"""
         await self.config.guild(ctx.guild).god_name.set(name)
         await ctx.tick()
 
     @adventureset.command()
+    @checks.admin_or_permissions(administrator=True)
     async def heroprice(self, ctx, *, price):
         """[Admin] Set the price to make new heroes"""
         try:
@@ -1312,6 +1328,7 @@ class Adventure(BaseCog):
             await ctx.send(f"Please use something that can convert to an integer...")
 
     @adventureset.command()
+    @checks.admin_or_permissions(administrator=True)
     async def classprice(self, ctx, *, price):
         """[Admin] Set the price to change hero class"""
         try:
@@ -1321,6 +1338,21 @@ class Adventure(BaseCog):
             await ctx.send(f"Please use something that can convert to an integer...")
 
     @adventureset.command()
+    @checks.admin_or_permissions(administrator=True)
+    async def carttime(self, ctx: Context, *, time: str):
+        """[Admin] Set the cooldown of the cart"""
+        time_delta = parse_timedelta(time)
+        if time_delta is None:
+            return await ctx.send("You must supply an amount and time unit like `120 seconds`.")
+        if time_delta.total_seconds() < 600:
+            cartname = await self.config.guild(ctx.guild).cart_name()
+            if not cartname:
+                cartname = await self.config.cart_name()
+            return await ctx.send(f"{cartname} doesn't have the energy to return that often.")
+        await self.config.guild(ctx.guild).cart_timeout.set(time_delta.seconds)
+        await ctx.tick()
+
+    @adventureset.command()
     @checks.is_owner()
     async def globalgod(self, ctx, *, name):
         """[Owner] Set the default name of the god"""
@@ -1328,6 +1360,7 @@ class Adventure(BaseCog):
         await ctx.tick()
 
     @adventureset.command(aliases=["embed"])
+    @checks.admin_or_permissions(administrator=True)
     async def embeds(self, ctx):
         """[Admin] Set whether or not to use embeds for the adventure game"""
         toggle = await self.config.guild(ctx.guild).embed()
@@ -1335,6 +1368,7 @@ class Adventure(BaseCog):
         await ctx.send(f"Embeds: {not toggle}")
 
     @adventureset.command()
+    @checks.admin_or_permissions(administrator=True)
     async def cartname(self, ctx, *, name):
         """[Admin] Set the server's name of the cart"""
         await self.config.guild(ctx.guild).cart_name.set(name)
@@ -2326,7 +2360,7 @@ class Adventure(BaseCog):
     @commands.guild_only()
     @commands.cooldown(rate=1, per=900, type=commands.BucketType.user)
     async def rage(self, ctx):
-        """[Berserker Class Only]
+        """[Berserker Class Only] 
 
         This allows a Berserker to add substantial attack bonuses for one battle.
         (15min cooldown)
@@ -2922,6 +2956,8 @@ class Adventure(BaseCog):
         if guild.id in self._current_traders:
             if reaction.message.id == self._current_traders[guild.id]["msg"]:
                 log.debug("handling cart")
+                if user in self._current_traders[guild.id]["users"]:
+                    return
                 await self._handle_cart(reaction, user)
         if guild.id in self._groups:
             if reaction.message.id == self._groups[guild.id].message_id:
@@ -2970,11 +3006,32 @@ class Adventure(BaseCog):
         emojis = ReactionPredicate.NUMBER_EMOJIS[:5]
         itemindex = emojis.index(str(reaction.emoji)) - 1
         items = self._current_traders[guild.id]["stock"][itemindex]
+        self._current_traders[guild.id]["users"].append(user)
         spender = user
         channel = reaction.message.channel
         currency_name = await bank.get_currency_name(guild)
+        item_data = box(items["itemname"] + " - " + str(items["price"]), lang="css")
+        to_delete = await channel.send(
+            f"{user.mention}, how many {item_data} would you like to buy (max: 5)?"
+        )
+        ctx = await self.bot.get_context(reaction.message)
+        ctx.author = user
+        pred = MessagePredicate.valid_int(ctx)
+        try:
+            await self.bot.wait_for("message", check=pred, timeout=30)
+        except asyncio.TimeoutError:
+            self._current_traders[guild.id]["users"].remove(user)
+            return
+        if pred.result < 1 or pred.result > 5:
+            await to_delete.delete()
+            if pred.result < 1:
+                await ctx.send("You're wasting my time.")
+            else:
+                await ctx.send("Don't be greedy... ")
+            self._current_traders[guild.id]["users"].remove(user)
+            return
         if await bank.can_spend(spender, int(items["price"])):
-            await bank.withdraw_credits(spender, int(items["price"]))
+            await bank.withdraw_credits(spender, int(items["price"]) * pred.result)
             try:
                 c = await Character._from_json(self.config, user)
             except Exception:
@@ -2982,28 +3039,34 @@ class Adventure(BaseCog):
                 return
             if "chest" in items["itemname"]:
                 if items["itemname"] == ".rare_chest":
-                    c.treasure[1] += 1
+                    c.treasure[1] += pred.result
                 elif items["itemname"] == "[epic chest]":
-                    c.treasure[2] += 1
+                    c.treasure[2] += pred.result
                 else:
-                    c.treasure[0] += 1
+                    c.treasure[0] += pred.result
             else:
                 item = Item._from_json({items["itemname"]: items["item"]})
+                item.owned = pred.result
                 log.debug(item.name)
                 if item.name in c.backpack:
                     log.debug("item already in backpack")
-                    c.backpack[item.name].owned += 1
+                    c.backpack[item.name].owned += pred.result
                 else:
                     c.backpack[item.name] = item
             await self._update_hero(user, c)
+            await to_delete.delete()
+            attrib = "it" if pred.result == 1 else "them"
             await channel.send(
-                (
-                    f"{self.E(user.display_name)} bought the {items['itemname']} for "
-                    f"{str(items['price'])} {currency_name} and put it into their backpack."
+                box(
+                    f"{self.E(user.display_name)} bought "
+                    f"{pred.result} {items['itemname']} for "
+                    f"{str(items['price'] * pred.result)} {currency_name} "
+                    f"and put {attrib} into their backpack.",
+                    lang="css"
                 )
             )
         else:
-            currency_name = await bank.get_currency_name(guild)
+            await to_delete.delete()
             await channel.send(
                 f"{self.E(user.display_name)} does not have enough {currency_name}."
             )
@@ -3982,6 +4045,7 @@ class Adventure(BaseCog):
             roll = random.randint(1, 20)
             if roll == 20:
                 ctx = await self.bot.get_context(message)
+                await asyncio.sleep(5)
                 await self._trader(ctx)
 
     async def _roll_chest(self, chest_type: str, pet_cha: int = 0):
@@ -4337,15 +4401,16 @@ class Adventure(BaseCog):
         if await self.config.guild(ctx.guild).cart_name():
             cart = await self.config.guild(ctx.guild).cart_name()
         text = box(f"[{cart} is bringing the cart around!]", lang="css")
+        timeout = 10800
+        if await self.config.guild(ctx.guild).cart_timeout():
+            timeout = await self.config.guild(ctx.guild).cart_timeout()
         if ctx.guild.id not in self._last_trade:
             self._last_trade[ctx.guild.id] = 0
-
         if self._last_trade[ctx.guild.id] == 0:
             self._last_trade[ctx.guild.id] = time.time()
-        elif (
-            self._last_trade[ctx.guild.id] >= time.time() - 10800
-        ):  # trader can return after 3 hours have passed since last visit.
+        elif self._last_trade[ctx.guild.id] >= time.time() - timeout:
             return  # silent return.
+        self.bot.dispatch("adventure_cart", ctx)  # dispatch after silent return
         self._last_trade[ctx.guild.id] = time.time()
         stock = await self._trader_get_items()
         currency_name = await bank.get_currency_name(ctx.guild)
@@ -4385,7 +4450,7 @@ class Adventure(BaseCog):
         text += "Do you want to buy any of these fine items? Tell me which one below:"
         msg = await ctx.send(text)
         start_adding_reactions(msg, controls.keys())
-        self._current_traders[ctx.guild.id] = {"msg": msg.id, "stock": stock}
+        self._current_traders[ctx.guild.id] = {"msg": msg.id, "stock": stock, "users": []}
         timeout = self._last_trade[ctx.guild.id] + 180 - time.time()
         if timeout <= 0:
             timeout = 0

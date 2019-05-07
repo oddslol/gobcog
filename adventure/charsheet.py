@@ -1,8 +1,13 @@
-from redbot.core import Config, bank
 import discord
-from typing import Optional, Dict, List, Set
-from copy import copy
+
 import logging
+import re
+
+from typing import Optional, Dict, List, Set
+from datetime import timedelta
+from copy import copy
+
+from redbot.core import Config, bank
 
 log = logging.getLogger("red.adventure")
 
@@ -23,7 +28,24 @@ ORDER = [
 ]
 TINKER_OPEN = r"{.:'"
 TINKER_CLOSE = r"':.}"
+TIME_RE_STRING = r"\s?".join(
+    [
+        r"((?P<days>\d+?)\s?(d(ays?)?))?",
+        r"((?P<hours>\d+?)\s?(hours?|hrs|hr?))?",
+        r"((?P<minutes>\d+?)\s?(minutes?|mins?|m))?",
+        r"((?P<seconds>\d+?)\s?(seconds?|secs?|s))?",
+    ]
+)
 
+TIME_RE = re.compile(TIME_RE_STRING, re.I)
+
+def parse_timedelta(argument: str) -> Optional[timedelta]:
+    matches = TIME_RE.match(argument)
+    if matches:
+        params = {k: int(v) for k, v in matches.groupdict().items() if v is not None}
+        if params:
+            return timedelta(**params)
+    return None
 
 class Item:
     """An object to represent an item in the game world"""
@@ -243,7 +265,7 @@ class Character(Item):
 
         return (
             f"[{self.user.display_name}'s Character Sheet]\n\n"
-            f"A level {self.lvl} {class_desc} \n\n- "
+            f"A level {self.lvl} {self.race.title()} {class_desc} \n\n- "
             f"ATTACK: {self.att} [+{self.skill['att']}] - "
             f"INTELLIGENCE: {self.int} [+{self.skill['int']}] - "
             f"DIPLOMACY: {self.cha} [+{self.skill['cha']}] -\n\n- "
@@ -427,7 +449,7 @@ class Character(Item):
         try:
             data = data["active"]
         # doesn't break current heroes - pythonic view of ask for forgiveness
-        except AttributeError:
+        except:
             pass
         if "name" not in data.keys():
             data["name"] = "active"
