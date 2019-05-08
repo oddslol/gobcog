@@ -254,7 +254,7 @@ class Character(Item):
         for lvl in range(1, self.lvl + 1):
             total_xp += 10 * (lvl ** 2) + ((lvl-1) * 100) + 100
         if self.heroclass != {} and "name" in self.heroclass:
-            class_desc = self.heroclass["name"] + "\n\n" + self.heroclass["desc"]
+            class_desc = self.heroclass["name"]
             if self.heroclass["name"] == "Ranger":
                 if not self.heroclass["pet"]:
                     class_desc += "\n\n- Current pet: None"
