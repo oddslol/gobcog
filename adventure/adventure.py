@@ -90,6 +90,7 @@ class Adventure(BaseCog):
             "heroclass": {
                 "name": "Hero",
                 "ability": False,
+                "ability2": False,
                 "desc": "Your basic adventuring hero.",
                 "forage": 0,
             },
@@ -515,52 +516,61 @@ class Adventure(BaseCog):
             "Wizard": {
                 "name": "Wizard",
                 "ability": False,
+                "ability2": False,
                 "desc": (
-                    "Wizards have the option to focus and add big bonuses to their magic, "
-                    "but their focus can sometimes go astray...\n"
-                    "The magic glyphs tattooed on their body are known to be bound with god, "
-                    "and can amplify the prayers.\n"
-                    "Use the focus command when attacking in an adventure."
+                    "__**Wizard**__\n"
+                    "**Passive ability** : the magic glyphs tattooed on your body are known to be bound with god, "
+                    "and have a change to amplify the prayers while using magic.\n"
+                    "**Ability Tiers I** : you **focus** your energy and add a big bonus to your magic [!focus].\n"
+                    "**Ability Tiers II** : you cast a forbidden spell to **invoke** creatures [!invoke].\n"
                 ),
             },
             "Tinkerer": {
                 "name": "Tinkerer",
                 "ability": False,
+                "ability2": False,
                 "desc": (
-                    "Tinkerers can forge two different items into a device "
-                    "bound to their very soul.\n"
-                    "From time to time, Tinkerers will sharpen the weapons of the fighters or "
+                    "__**Tinkerer**__\n"
+                    "**Passive ability** : from time to time, you will sharpen the weapons of the fighters or "
                     "craft mana potions for the magicians, slightly increasing their damages.\n"
-                    "Use the forge command."
+                    "**Ability Tiers I** : you **forge** two different items into a device bound to your very soul [!forge].\n"
+                    "**Ability Tiers II** : you use various handcrafted items such as a **bomb** [!bomb].\n"
+
                 ),
             },
             "Berserker": {
                 "name": "Berserker",
                 "ability": False,
+                "ability2": False,
                 "desc": (
-                    "Berserkers have the option to rage and add big bonuses to attacks, "
-                    "but fumbles hurt.\n"
-                    "When arguing with an enemy, Bersekers can enter in a state of wild fury, "
+                    "__**Berserker**__\n"
+                    "**Passive ability** : when arguing with an enemy, you can enter in a state of wild fury, "
                     "that intimidates the enemy and makes the negotiation easier for the whole party.\n"
-                    "Use the rage command when attacking in an adventure."
+                    "**Ability Tiers I** : you **rage** and add a big bonus to your attack [!rage].\n"
+                    "**Ability Tiers II** : you use your own **blood** to unleash your power [!blood].\n"
                 ),
             },
             "Cleric": {
                 "name": "Cleric",
                 "ability": False,
+                "ability2": False,
                 "desc": (
-                    "Clerics can bless the entire group and add small bonus to each adventurer, "
-                    "but prayers can remain unanswered...\n"
-                    "Divine aura can radiate from Clerics while praying, increasing the critical chances and abilities of fighters and wizards.\n"
-                    "Use the bless command when praying in an adventure."
+                    "__**Cleric**__\n"
+                    "**Passive ability** : divine aura can radiate from you while praying, "
+                    "increasing the critical chances and abilities of fighters and wizards.\n"
+                    "**Ability Tiers I** : you **bless** the entire group and add small bonus to each adventurer [!bless].\n"
+                    "**Ability Tiers II** : you **sacrifice** sacred animals to get favors of the gods [!sacrifice].\n"
                 ),
             },
             "Ranger": {
                 "name": "Ranger",
                 "ability": False,
+                "ability2": False,
                 "desc": (
-                    "Rangers can gain a special pet, which can find items and give "
-                    "reward bonuses.\nUse the pet command to see pet options."
+                    "__**Ranger**__\n"
+                    "**Passive ability** : your pet can give reward bonuses.\n"
+                    "**Ability Tiers I** : you can gain a special **pet** and use it to find treasures [!pet and pet! forage].\n"
+                    "**Ability Tiers II** : you **unleash** your pet to help you in the battlefield [!unleash].\n"
                 ),
                 "pet": {},
                 "forage": 0.0,
@@ -568,12 +578,13 @@ class Adventure(BaseCog):
             "Bard": {
                 "name": "Bard",
                 "ability": False,
+                "ability2": False,
                 "desc": (
-                    "Bards can perform to aid their comrades in diplomacy.\n"
-                    "Due to their natural intelligence, they learnt a little bit about magic "
-                    "and have a chance to decrease magic resistance with their melodious voices.\n"
-                    "Bards are also talented with daggers and can weaken physical resistance through precision incisions.\n"
-                    "Use the music command when being diplomatic in an adventure."
+                    "__**Bard**__\n"
+                    "**Passive ability** : you have a chance to decrease magic resistance with your melodious voice, "
+                    "and can weaken physical resistance through precise incisions.\n"
+                    "**Ability Tiers I** : you can perform some **music** to aid your comrades in diplomacy [!music].\n"
+                    "**Ability Tiers II** : you **dance** with several kind of styles to boost your damages [!dance].\n"
                 ),
             },
         }
@@ -1146,9 +1157,225 @@ class Adventure(BaseCog):
             c.heroclass["ability"] = True
             await self._update_hero(ctx.author, c)
             await ctx.send(
-                f"📜 {bold(self.E(ctx.author.display_name))} " f"is starting an inspiring sermon. 📜"
+                f"{bold(self.E(ctx.author.display_name))} " f"is starting an inspiring sermon...📜"
             )
 
+    @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
+    async def blood(self, ctx):
+        """[Berserker Class Only - level 30 required]
+         This allows a Berserker to use any kind of attack
+        with his max stat (or a small boost to his max stat)
+        (30min cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Berserker":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Berserker to do this."
+            )
+        else:
+            if c.heroclass["ability2"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            if c.lvl < 30:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, this ability is unlocked level 30."
+                )                     
+            c.heroclass["ability2"] = True
+            await self._update_hero(ctx.author, c)
+            await ctx.send(
+                f"{bold(self.E(ctx.author.display_name))} self-harms and blood begins to trickle along the forearm...:rage:"
+            )
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
+    async def invoke(self, ctx):
+        """[Wizard Class Only - level 30 required]
+         This allows a Wizard to use any kind of attack
+        with his max stat (or a small boost to his max stat)
+        (30min cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Wizard":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Wizard to do this."
+            )
+        else:
+            if c.heroclass["ability2"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            if c.lvl < 30:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, this ability is unlocked level 30."
+                )                     
+            c.heroclass["ability2"] = True
+            await self._update_hero(ctx.author, c)
+            await ctx.send(
+                f"{bold(self.E(ctx.author.display_name))} casts a forbidden invocation spell...:candle:"
+            )
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
+    async def dance(self, ctx):
+        """[Bard Class Only - level 30 required]
+         This allows a Bard to use any kind of attack
+        with his max stat (or a small boost to his max stat)
+        (30min cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Bard":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Bard to do this."
+            )
+        else:
+            if c.heroclass["ability2"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            if c.lvl < 30:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, this ability is unlocked level 30."
+                )                     
+            c.heroclass["ability2"] = True
+            await self._update_hero(ctx.author, c)
+            await ctx.send(
+                f"{bold(self.E(ctx.author.display_name))} starts an a mysterious dance...:man_dancing:"
+            )
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
+    async def sacrifice(self, ctx):
+        """[Cleric Class Only - level 30 required]
+         This allows a Cleric to use any kind of attack
+        with his max stat (or a small boost to his max stat)
+        (30min cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Wizard":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Cleric to do this."
+            )
+        else:
+            if c.heroclass["ability2"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            if c.lvl < 30:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, this ability is unlocked level 30."
+                )                     
+            c.heroclass["ability2"] = True
+            await self._update_hero(ctx.author, c)
+            await ctx.send(
+                f"{bold(self.E(ctx.author.display_name))} approaches the altar of the ancient gods with an unknown silhouette...:knife:"
+            )
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
+    async def unleash(self, ctx):
+        """[Ranger Class Only - level 30 required]
+         This allows a Ranger to use any kind of attack
+        with his max stat (or a small boost to his max stat)
+        (30min cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Ranger":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Ranger to do this."
+            )
+        else:
+            if c.heroclass["ability2"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            if c.lvl < 30:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, this ability is unlocked level 30."
+                )
+            if not c.heroclass["pet"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, you need a pet to use this ability."
+                ) 
+            c.heroclass["ability2"] = True
+            await self._update_hero(ctx.author, c)
+            pet_name = c.heroclass["pet"]["name"] if c.heroclass["pet"] else "old friend"
+            await ctx.send(
+                f"{bold(self.E(ctx.author.display_name))} whispers some instructions to his {pet_name}...:feet:"
+            )
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
+    async def bomb(self, ctx):
+        """[Tinkerer Class Only - level 30 required]
+         This allows a Tinkerer to use any kind of attack
+        with his max stat (or a small boost to his max stat)
+        (30min cooldown)
+        """
+
+        try:
+            c = await Character._from_json(self.config, ctx.author)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+        if c.heroclass["name"] != "Tinkerer":
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.send(
+                f"{self.E(ctx.author.display_name)}, you need to be a Tinkerer to do this."
+            )
+        else:
+            if c.heroclass["ability2"]:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, ability already in use."
+                )
+            if c.lvl < 30:
+                return await ctx.send(
+                    f"{self.E(ctx.author.display_name)}, this ability is unlocked level 30."
+                )                     
+            c.heroclass["ability2"] = True
+            await self._update_hero(ctx.author, c)
+            await ctx.send(
+                f"{bold(self.E(ctx.author.display_name))} takes out of his backpack what looks like a bomb...:bomb:"
+            )
+                    
+                                      
     @commands.group(aliases=["loadouts"])
     async def loadout(self, ctx):
         """Setup various adventure settings"""
@@ -3528,6 +3755,129 @@ class Adventure(BaseCog):
                 pass
             await self._update_hero(user, c)
 
+    async def _ability2_bonus(self, user, stat_checks, ability2_list_users):
+        bonus_stat = 0
+        try:
+            c = await Character._from_json(self.config, user)
+        except Exception:
+            log.error("Error with the new character sheet", exc_info=True)
+            return
+            
+        for stat in stat_checks: #calculates the standard stat value 
+            bonus_stat += getattr(c, stat) + c.skill[stat]
+        bonus_stat = int(bonus_stat / len(stat_checks))
+        if c.heroclass["ability2"]: #if ability2 is active, calculates the max stat)
+            max_stat = int(1.1 * max(c.att + c.skill["att"], c.int + c.skill["int"], c.cha + c.skill["cha"], (c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"]) / 1.5))
+            if stat_checks == ["att"]:
+                choice = "🗡"
+            elif stat_checks == ["int"]:
+                choice = "🌟"
+            elif stat_checks == ["cha"]:
+                choice = "🗨"
+            else:
+                choice = "🛐"
+            user_bonus = f"{bold(self.E(user.display_name))} ({choice}{bonus_stat})" 
+            ability2_list_users.append([c.heroclass["name"], user_bonus]) #adds the [class, user (bonus)] in a list for further display
+        return bonus_stat, ability2_list_users
+
+    async def _ability2_txt(self, attack_type, ability2_list_users):
+        ability2_txt = ""
+        if len(ability2_list_users) == 0:
+            return ability2_txt
+        else:
+            bard_list = [user[1] for user in ability2_list_users if user[0] == "Bard"]
+            berserker_list = [user[1] for user in ability2_list_users if user[0] == "Berserker"]
+            cleric_list = [user[1] for user in ability2_list_users if user[0] == "Cleric"]
+            ranger_list = [user[1] for user in ability2_list_users if user[0] == "Ranger"]
+            tinkerer_list = [user[1] for user in ability2_list_users if user[0] == "Tinkerer"]
+            wizard_list = [user[1] for user in ability2_list_users if user[0] == "Wizard"]
+
+        if len(bard_list) > 0:
+            attrib = "s" if len(bard_list) == 1 else ""
+            if attack_type == "fight":
+                ability2_txt += f"{bold(humanize_list(bard_list))} look{attrib} like whirling blades!\n"
+            if attack_type == "magic":
+                ability2_txt += f"Firebolts gush from {bold(humanize_list(bard_list))}'s spinning torches!\n"
+            if attack_type == "pray":
+                ability2_txt += f"{bold(humanize_list(bard_list))} perform{attrib} a ritual dance for the gods!\n"
+            if attack_type == "talk":
+                ability2_txt += f"The enemy is amazed by {bold(humanize_list(bard_list))}'s choreography!\n"
+        if len(berserker_list) > 0:
+            if attack_type == "fight":
+                ability2_txt += f"The smell of blood triggers {bold(humanize_list(berserker_list))}'s frenzy!\n"
+            if attack_type == "magic":
+                ability2_txt += f"Summoned by all this blood, bear spirits support {bold(humanize_list(berserker_list))} with their magic powers!\n"
+            if attack_type == "pray":
+                ability2_txt += f"{bold(humanize_list(berserker_list))}'s blood is offered to the gods!\n"
+            if attack_type == "talk":
+                ability2_txt += f"{bold(humanize_list(berserker_list))} can see the fear in the eyes of the enemy!\n"
+        if len(cleric_list) > 0:
+            if attack_type == "fight":
+                ability2_txt += f"Tyr is enchanted by the sacrificed bulls and gives {bold(humanize_list(cleric_list))} supernatural strength!\n"
+            if attack_type == "magic":
+                ability2_txt += f"Thor is pleased by the sacrificed goats and rewards {bold(humanize_list(cleric_list))} with lightning strikes!\n"
+            if attack_type == "pray":
+                ability2_txt += f"Loki is thrilled by the sacrificed wolves and magnifies {bold(humanize_list(cleric_list))}'s prayers!\n"
+            if attack_type == "talk":
+                ability2_txt += f"Odin is delighted by the sacrificed horses and makes {bold(humanize_list(cleric_list))} full of cunning!\n"
+        if len(ranger_list) > 0:
+            if len(ranger_list) == 1:
+                attrib1 = ""
+                attrib2 = "s"
+                attrib3 = "es"
+                attrib4 = "an"
+            else:
+                attrib1 = "s"
+                attrib2 = ""
+                attrib3 = ""
+                attrib4 = "their"
+            if attack_type == "fight":
+                ability2_txt += f"The pet{attrib1} attack{attrib2} together with {bold(humanize_list(ranger_list))}!\n"
+            if attack_type == "magic":
+                ability2_txt += f"{bold(humanize_list(ranger_list))} harness{attrib3} the spirit animal of their pet{attrib1}!\n"
+            if attack_type == "pray":
+                ability2_txt += f"{bold(humanize_list(ranger_list))}'s pet{attrib1} come{attrib2} back from hunting with a valuable offering to the gods!\n"
+            if attack_type == "talk":
+                ability2_txt += f"{bold(humanize_list(ranger_list))}'s pet{attrib1} soften{attrib2} the enemy with {attrib4} endearing little face{attrib1}!\n"
+        if len(tinkerer_list) > 0:
+            if len(tinkerer_list) == 1:
+                attrib1 = "a"
+                attrib2 = "an"
+                attrib3 = "s"
+                attrib4 = ""
+            else:
+                attrib1 = ""
+                attrib2 = ""
+                attrib3 = ""
+                attrib4 = "s"
+            if attack_type == "fight":
+                ability2_txt += f"{bold(humanize_list(tinkerer_list))} throw{attrib3} {attrib1} shrapnel grenade{attrib4} into the enemy!\n"
+            if attack_type == "magic":
+                ability2_txt += f"{bold(humanize_list(tinkerer_list))} throw{attrib3} {attrib2} elemental bomb{attrib4} into the enemy!\n"
+            if attack_type == "pray":
+                ability2_txt += f"{bold(humanize_list(tinkerer_list))} place{attrib3} {attrib1} handcrafted figurine{attrib4} of Loki on the altar of the gods!\n"
+            if attack_type == "talk":
+                ability2_txt += f"{bold(humanize_list(tinkerer_list))} release{attrib3} a laughing gas near the enemy!\n"
+        if len(wizard_list) > 0:
+            if len(wizard_list) == 1:
+                attrib1 = "a"
+                attrib2 = ""
+                attrib3 = "us"
+            else:
+                attrib1 = ""
+                attrib2 = "s"
+                attrib3 = "i"
+            if attack_type == "fight":
+                ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} chaos golem{attrib2} with indestructible fists!\n"
+            if attack_type == "magic":
+                ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} lightning elemental{attrib2}, ready to cast thunderbolts!\n"
+            if attack_type == "pray":
+                ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} beautiful deer{attrib2}, as gift{attrib2} for the gods!\n"                
+            if attack_type == "talk":
+                ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} charming succub{attrib3}, expert{attrib2} in seduction!\n"
+
+        return ability2_txt                
+                               
     async def _class_bonus(self, class_name, user_list, stat_checks):
         ability_triggered = False
         bonus_stat = 0
@@ -3581,6 +3931,8 @@ class Adventure(BaseCog):
         session = self._sessions[guild_id]
         pdef = self.MONSTERS[challenge]["pdef"]
         mdef = self.MONSTERS[challenge]["mdef"]
+        ability2_fight_list = []
+        ability2_magic_list = []
         # make sure we pass this check first
         if len(session.fight + session.magic) >= 1:
             msg = ""
@@ -3642,7 +3994,7 @@ class Adventure(BaseCog):
             except Exception:
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
-            att_value = c.att + c.skill["att"]
+            att_value, ability2_fight_list = await self._ability2_bonus(user, ["att"], ability2_fight_list)
             if roll == 1:
                 hero_dmg = 0
                 msg += f"{bold(self.E(user.display_name))} fumbled the attack.\n"
@@ -3694,7 +4046,7 @@ class Adventure(BaseCog):
             except Exception:
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
-            int_value = c.int + c.skill["int"]
+            int_value, ability2_magic_list = await self._ability2_bonus(user, ["int"], ability2_magic_list)
             if roll == 1:
                 hero_dmg = 0
                 msg += f"{bold(self.E(user.display_name))} almost set themselves on fire.\n"
@@ -3745,7 +4097,8 @@ class Adventure(BaseCog):
                 session.magic.remove(user)
         if report == "Attack Party: ":
             report = ""  # if everyone fumbles
-        msg = msg + report + "\n"
+        pre_fight = await self._ability2_txt("fight", ability2_fight_list) + await self._ability2_txt("magic", ability2_magic_list)
+        msg = pre_fight + msg + report + "\n"
         return (fumblelist, critlist, attack, magic, msg)
 
     async def handle_pray(self, guild_id, fumblelist, attack, diplomacy, magic):
@@ -3758,6 +4111,7 @@ class Adventure(BaseCog):
         bless_bonus = 0
         total_bless_bonus = 0
         bless_list_name = []
+        ability2_pray_list = []
         if len(pray_list) >= 1:
             msg = ""
             report = ""
@@ -3785,7 +4139,7 @@ class Adventure(BaseCog):
             except Exception:
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
-            pray_bonus = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
+            pray_bonus, ability2_pray_list = await self._ability2_bonus(user, ["att", "int", "cha"], ability2_pray_list)
             roll = random.randint(1, 20)
             pray_score = pray_bonus + roll
             if c.heroclass["name"] == "Cleric" and c.heroclass["ability"]: #always calculate the bless bonus and its total
@@ -3830,7 +4184,8 @@ class Adventure(BaseCog):
             bless_msg = f"The party is greatly inspired by {bold(humanize_list(bless_list_name))}! *[+{total_bless_bonus} to 🗡/🗨/🌟]*\n"
         else:
             bless_msg = ""
-        msg = bless_msg + msg + header + report + "\n"
+        pre_fight = await self._ability2_txt("pray", ability2_pray_list)
+        msg = pre_fight + bless_msg + msg + header + report + "\n"
         for user in fumblelist:
             if user in pray_list:
                 pray_list.remove(user)
@@ -3838,6 +4193,7 @@ class Adventure(BaseCog):
 
     async def handle_talk(self, guild_id, fumblelist, critlist, diplomacy):
         session = self._sessions[guild_id]
+        ability2_talk_list = []
         if len(session.talk) >= 1:
             report = "Talking Party: "
             msg = ""
@@ -3855,7 +4211,7 @@ class Adventure(BaseCog):
                 log.error("Error with the new character sheet", exc_info=True)
                 continue
             roll = random.randint(1, 20)
-            dipl_value = c.cha + c.skill["cha"]     
+            dipl_value, ability2_talk_list = await self._ability2_bonus(user, ["cha"], ability2_talk_list)   
             if roll == 1:
                 hero_talk = 0
                 msg += f"{bold(self.E(user.display_name))} accidentally offended the enemy.\n"
@@ -3902,7 +4258,8 @@ class Adventure(BaseCog):
                 session.talk.remove(user)
         if report == "Talking Party: ":
             report = ""  # if everyone fumbles
-        msg = msg + report + "\n"
+        pre_fight = await self._ability2_txt("talk", ability2_talk_list)
+        msg = pre_fight + msg + report + "\n"
         return (fumblelist, critlist, diplomacy, msg)
 
     async def handle_basilisk(self, ctx, failed):
