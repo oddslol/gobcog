@@ -266,6 +266,7 @@ class Adventure(BaseCog):
     @_hero.command(name="new")
     async def hero_new(self, ctx, *, name: str = None):
         """Create a new hero
+
         They can be from any of the following races: Human, Dwarf, Elf, Valkyrie, Fairy
         """
         cost = 50000  #default
@@ -724,6 +725,7 @@ class Adventure(BaseCog):
                                         )
                                 else:
                                     c.heroclass["ability"] = False
+                                    c.heroclass["ability2"] = False
                                     c.heroclass["pet"] = {}
                                     c.heroclass = classes[clz]
                                     await self._update_hero(ctx.author, c)
@@ -1165,8 +1167,9 @@ class Adventure(BaseCog):
     @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
     async def blood(self, ctx):
         """[Berserker Class Only - level 30 required]
-         This allows a Berserker to use any kind of attack
-        with his max stat (or a small boost to his max stat)
+
+        This allows a Berserker to use any kind of attack
+        with his max stat + a bonus
         (30min cooldown)
         """
 
@@ -1200,8 +1203,9 @@ class Adventure(BaseCog):
     @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
     async def invoke(self, ctx):
         """[Wizard Class Only - level 30 required]
-         This allows a Wizard to use any kind of attack
-        with his max stat (or a small boost to his max stat)
+        
+        This allows a Wizard to use any kind of attack
+        with his max stat + a bonus
         (30min cooldown)
         """
 
@@ -1235,8 +1239,9 @@ class Adventure(BaseCog):
     @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
     async def dance(self, ctx):
         """[Bard Class Only - level 30 required]
-         This allows a Bard to use any kind of attack
-        with his max stat (or a small boost to his max stat)
+
+        This allows a Bard to use any kind of attack
+        with his max stat + a bonus
         (30min cooldown)
         """
 
@@ -1262,7 +1267,7 @@ class Adventure(BaseCog):
             c.heroclass["ability2"] = True
             await self._update_hero(ctx.author, c)
             await ctx.send(
-                f"{bold(self.E(ctx.author.display_name))} starts an a mysterious dance...:man_dancing:"
+                f"{bold(self.E(ctx.author.display_name))} starts a mysterious dance...:man_dancing:"
             )
 
     @commands.command()
@@ -1270,8 +1275,9 @@ class Adventure(BaseCog):
     @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
     async def sacrifice(self, ctx):
         """[Cleric Class Only - level 30 required]
-         This allows a Cleric to use any kind of attack
-        with his max stat (or a small boost to his max stat)
+
+        This allows a Cleric to use any kind of attack
+        with his max stat + a bonus
         (30min cooldown)
         """
 
@@ -1305,8 +1311,9 @@ class Adventure(BaseCog):
     @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
     async def unleash(self, ctx):
         """[Ranger Class Only - level 30 required]
-         This allows a Ranger to use any kind of attack
-        with his max stat (or a small boost to his max stat)
+
+        This allows a Ranger to use any kind of attack
+        with his max stat + a bonus
         (30min cooldown)
         """
 
@@ -1345,8 +1352,9 @@ class Adventure(BaseCog):
     @commands.cooldown(rate=1, per=1800, type=commands.BucketType.user)
     async def bomb(self, ctx):
         """[Tinkerer Class Only - level 30 required]
-         This allows a Tinkerer to use any kind of attack
-        with his max stat (or a small boost to his max stat)
+
+        This allows a Tinkerer to use any kind of attack
+        with his max stat + a bonus
         (30min cooldown)
         """
 
@@ -2882,8 +2890,10 @@ class Adventure(BaseCog):
                 except Exception:
                     log.error("Error with the new character sheet", exc_info=True)
                     continue
-                if c.heroclass["name"] != "Ranger" and c.heroclass["ability"]:
-                    c.heroclass["ability"] = False
+                if c.heroclass["ability"]:
+                    if c.heroclass["name"] != "Ranger":
+                        c.heroclass["ability"] = False
+                    c.heroclass["ability2"] = False
                     await self._update_hero(user, c)
         del self._sessions[ctx.guild.id]
         if group:
@@ -3767,7 +3777,7 @@ class Adventure(BaseCog):
             bonus_stat += getattr(c, stat) + c.skill[stat]
         bonus_stat = int(bonus_stat / len(stat_checks))
         if c.heroclass["ability2"]: #if ability2 is active, calculates the max stat)
-            max_stat = int(1.1 * max(c.att + c.skill["att"], c.int + c.skill["int"], c.cha + c.skill["cha"], (c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"]) / 1.5))
+            bonus_stat = int(1.1 * max(c.att + c.skill["att"], c.int + c.skill["int"], c.cha + c.skill["cha"], (c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"]) / 1.5))
             if stat_checks == ["att"]:
                 choice = "🗡"
             elif stat_checks == ["int"]:
@@ -3776,7 +3786,7 @@ class Adventure(BaseCog):
                 choice = "🗨"
             else:
                 choice = "🛐"
-            user_bonus = f"{bold(self.E(user.display_name))} ({choice}{bonus_stat})" 
+            user_bonus = f"{self.E(user.display_name)} ({choice}{bonus_stat})" 
             ability2_list_users.append([c.heroclass["name"], user_bonus]) #adds the [class, user (bonus)] in a list for further display
         return bonus_stat, ability2_list_users
 
@@ -3857,7 +3867,7 @@ class Adventure(BaseCog):
             if attack_type == "pray":
                 ability2_txt += f"{bold(humanize_list(tinkerer_list))} place{attrib3} {attrib1} handcrafted figurine{attrib4} of Loki on the altar of the gods!\n"
             if attack_type == "talk":
-                ability2_txt += f"{bold(humanize_list(tinkerer_list))} release{attrib3} a laughing gas near the enemy!\n"
+                ability2_txt += f"{bold(humanize_list(tinkerer_list))} release{attrib3} laughing gas near the enemy!\n"
         if len(wizard_list) > 0:
             if len(wizard_list) == 1:
                 attrib1 = "a"
@@ -3872,7 +3882,7 @@ class Adventure(BaseCog):
             if attack_type == "magic":
                 ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} lightning elemental{attrib2}, ready to cast thunderbolts!\n"
             if attack_type == "pray":
-                ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} beautiful deer{attrib2}, as gift{attrib2} for the gods!\n"                
+                ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} beautiful deer, as gift{attrib2} for the gods!\n"                
             if attack_type == "talk":
                 ability2_txt += f"{bold(humanize_list(wizard_list))} invoked {attrib1} charming succub{attrib3}, expert{attrib2} in seduction!\n"
 
