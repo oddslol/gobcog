@@ -1,8 +1,13 @@
-from redbot.core import Config, bank
 import discord
-from typing import Optional, Dict, List, Set
-from copy import copy
+
 import logging
+import re
+
+from typing import Optional, Dict, List, Set
+from datetime import timedelta
+from copy import copy
+
+from redbot.core import Config, bank
 
 log = logging.getLogger("red.adventure")
 
@@ -23,7 +28,24 @@ ORDER = [
 ]
 TINKER_OPEN = r"{.:'"
 TINKER_CLOSE = r"':.}"
+TIME_RE_STRING = r"\s?".join(
+    [
+        r"((?P<days>\d+?)\s?(d(ays?)?))?",
+        r"((?P<hours>\d+?)\s?(hours?|hrs|hr?))?",
+        r"((?P<minutes>\d+?)\s?(minutes?|mins?|m))?",
+        r"((?P<seconds>\d+?)\s?(seconds?|secs?|s))?",
+    ]
+)
 
+TIME_RE = re.compile(TIME_RE_STRING, re.I)
+
+def parse_timedelta(argument: str) -> Optional[timedelta]:
+    matches = TIME_RE.match(argument)
+    if matches:
+        params = {k: int(v) for k, v in matches.groupdict().items() if v is not None}
+        if params:
+            return timedelta(**params)
+    return None
 
 class Item:
     """An object to represent an item in the game world"""
@@ -178,6 +200,8 @@ class Character(Item):
     """An class to represent the characters stats"""
 
     def __init__(self, **kwargs):
+        self.name: str = kwargs.pop("name")
+        self.race: str = kwargs.pop("race")
         self.exp: int = kwargs.pop("exp")
         self.lvl: int = kwargs.pop("lvl")
         self.treasure: List[int] = kwargs.pop("treasure")
@@ -241,7 +265,7 @@ class Character(Item):
 
         return (
             f"[{self.user.display_name}'s Character Sheet]\n\n"
-            f"A level {self.lvl} {class_desc} \n\n- "
+            f"A level {self.lvl} {self.race.title()} {class_desc} \n\n- "
             f"ATTACK: {self.att} [+{self.skill['att']}] - "
             f"INTELLIGENCE: {self.int} [+{self.skill['int']}] - "
             f"DIPLOMACY: {self.cha} [+{self.skill['cha']}] -\n\n- "
@@ -422,6 +446,14 @@ class Character(Item):
     async def _from_json(cls, config: Config, user: discord.Member):
         """Return a Character object from config and user"""
         data = await config.user(user).all()
+        # I don't understand how "active" is in keys when it's not in json... but if exp is there
+        # it's an old hero and we need to use that. Soon as we have an "active" hero, exp will have been deleted
+        if "exp" not in data.keys():
+            data = data["active"]
+        if "name" not in data.keys():
+            data["name"] = "active"
+        if "race" not in data.keys():
+            data["race"] = "human"
         balance = await bank.get_balance(user)
         equipment = {
             k: Item._from_json(v) if v else None
@@ -448,6 +480,8 @@ class Character(Item):
             data["treasure"].append(0)
         # log.debug(data["items"]["backpack"])
         hero_data = {
+            "name": data["name"],
+            "race": data["race"],
             "exp": data["exp"],
             "lvl": data["lvl"],
             "att": data["att"],
@@ -471,7 +505,9 @@ class Character(Item):
         for k, v in self.backpack.items():
             for n, i in v._to_json().items():
                 backpack[n] = i
-        return {
+        return { 
+            "name": self.name, # should always have a name even fresh because we add one in _from_json
+            "race": self.race,
             "exp": self.exp,
             "lvl": self.lvl,
             "att": self.att,
@@ -494,5 +530,5 @@ class Character(Item):
             "backpack": backpack,
             "loadouts": self.loadouts,  # convert to dict of items
             "heroclass": self.heroclass,
-            "skill": self.skill,
+            "skill": self.skill, 
         }
