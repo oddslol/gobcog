@@ -2807,6 +2807,9 @@ class Adventure(BaseCog):
     async def _build_loadout_display(self, userdata):
         form_string = "Items Equipped:"
         last_slot = ""
+        total_att = 0
+        total_int = 0
+        total_cha = 0
         for slot, data in userdata["items"].items():
 
             if slot == "backpack":
@@ -2820,14 +2823,18 @@ class Adventure(BaseCog):
                 form_string += f"\n\n {slot.title()} slot"
                 continue
             item = Item._from_json(data)
+            total_att += item.att
+            total_int += item.int
+            total_cha += item.cha
             slot_name = userdata["items"][slot]["".join(i for i in data.keys())]["slot"]
             slot_name = slot_name[0] if len(slot_name) < 2 else "two handed"
             form_string += f"\n\n {slot_name.title()} slot"
             last_slot = slot_name
             rjust = max([len(i) for i in data.keys()])
             form_string += f"\n  - {str(item):<{rjust}} - (ATT: {item.att} | DPL: {item.cha} | INT: {item.int})"
-
-        return form_string + "\n"
+        
+        total_stats = f"ATTACK: {total_att} - INTELLIGENCE: {total_int} - DIPLOMACY: {total_cha}\n"
+        return total_stats + form_string + "\n"
 
     @commands.command()
     async def unequip(self, ctx, *, item: str):
@@ -3972,7 +3979,7 @@ class Adventure(BaseCog):
                 continue
             bonus_cleric = int((c.int + c.skill["int"] + c.att + c.skill["att"] + c.cha + c.skill["cha"])/3)
             if c.heroclass["name"] == "Cleric" and not aura:
-                chance = min(int(bonus_cleric / 1.5 + 1), c.lvl * 2)
+                chance = min(int(bonus_cleric / 1.8 + 1), c.lvl)
                 aura_roll = random.randint(1, 100)
                 if aura_roll in range (1, chance):
                     aura = True
@@ -4217,8 +4224,6 @@ class Adventure(BaseCog):
                     f"| {bold(self.E(user.display_name))}: "
                     f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/🌟{contrib_magic}** | "
                     )
-                    if (contrib_attack + contrib_magic + contrib_diplomacy) <= 0:
-                        fumblelist.append(user)
                 else: #no cleric's bonus activated and roll 1
                     msg += f"{bold(self.E(user.display_name))}'s prayers went unanswered by {god}.\n"
                     fumblelist.append(user)
@@ -4259,6 +4264,7 @@ class Adventure(BaseCog):
         if fury_bonus > 0:
             msg += f"{bold(self.E(fury_user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"
         aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
+        bless_display = f" +🛐{bless_bonus}" if bless_bonus != 0 else ""
 
         for user in session.talk:
             try:
@@ -4281,7 +4287,7 @@ class Adventure(BaseCog):
                     bonus = ability + str(bonus)
                     report += (
                         f"| {bold(self.E(user.display_name))} "
-                        f"🎲({roll}) -💥{bonus} +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
+                        f"🎲({roll}) -💥{bonus} +🗨{str(dipl_value)}{bless_display} did **🗨{hero_talk}** | "
                     )
                 if hero_talk <= 0:
                     fumblelist.append(user)
@@ -4290,7 +4296,7 @@ class Adventure(BaseCog):
                 if roll == 20:
                     msg += f"{bold(self.E(user.display_name))} made a compelling argument.\n"
                     critlist.append(user)
-                if c.heroclass["ability"]:
+                if c.heroclass["name"] == "Bard" and c.heroclass["ability"]:
                     ability = "🎵"
                 bonus_roll = random.randint(5, 15)
                 bonus_multi = 0.5 if (c.heroclass["name"] == "Bard" and c.heroclass["ability"]) else random.choice([0.2, 0.3, 0.4, 0.5])
@@ -4300,13 +4306,13 @@ class Adventure(BaseCog):
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))} "
-                    f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
+                    f"🎲({roll}) +💥{bonus} +🗨{str(dipl_value)}{bless_display} did **🗨{hero_talk}** | "
                 )
             else:
                 hero_talk = int((roll + dipl_value + bless_bonus) * (1 + (fury_bonus / 100)))
                 diplomacy += hero_talk
                 report += (
-                    f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)} did **🗨{hero_talk}** | "
+                    f"| {bold(self.E(user.display_name))} 🎲({roll}) +🗨{str(dipl_value)}{bless_display} did **🗨{hero_talk}** | "
                 )
         
         for user in fumblelist:
