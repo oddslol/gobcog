@@ -267,7 +267,13 @@ class Adventure(BaseCog):
     async def hero_new(self, ctx, *, name: str = None):
         """Create a new hero
 
-        They can be from any of the following races: Human, Dwarf, Elf, Valkyrie, Fairy
+        They can be from any of the following races: Human, Dwarf, Elf, Valkyrie, Fairy.
+        
+        Humans: Can take over an adventure and provide the party with extra experience
+        Dwarves: Are adept at finding treasure after a successful adventure
+        Elves: Have great charisma and can sometimes guess the charisma of the encounter
+        Fairies: Can use their magic to size up a monster and check their hp
+        Valkyries: Are able to command Pegasi to save them from an otherwise lost adventure
         """
         cost = 50000  #default
         currency_name = await bank.get_currency_name(ctx.author.guild)
