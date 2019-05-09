@@ -4569,13 +4569,30 @@ class Adventure(BaseCog):
                 )
             return None
         slot = item.slot[0]
+        curr_item = getattr(c, slot)
+        curr_txt = ""
+        if curr_item:
+            att_diff = item.att - curr_item.att
+            att_diff = f"+{str(att_diff)}" if att_diff >= 0 else f"{str(att_diff)}"
+            int_diff = item.int - curr_item.int
+            int_diff = f"+{str(int_diff)}" if int_diff >= 0 else f"{str(int_diff)}"
+            cha_diff = item.cha - curr_item.cha
+            cha_diff = f"+{str(cha_diff)}" if cha_diff >= 0 else f"{str(cha_diff)}"
+            curr_txt += (
+                f"\n\nThe current item in this slot is {curr_item}. (Attack: "
+                f"{str(curr_item.att)} [{att_diff}], Intelligence: {str(curr_item.int)} [{int_diff}], Charisma: {str(curr_item.cha)} [{cha_diff}])\n"
+            )
+        else:
+            curr_txt += (
+                f"\n\nThis slot is currently empty.\n"
+            )
         if len(item.slot) > 1:
             slot = "two handed"
         if hasattr(user, "display_name"):
 
             chest_msg2 = (
                 f"{self.E(user.display_name)} found a {item}. (Attack: "
-                f"{str(item.att)}, Intelligence: {str(item.int)}, Charisma: {str(item.cha)}) [{slot}]"
+                f"{str(item.att)}, Intelligence: {str(item.int)}, Charisma: {str(item.cha)}) [{slot}]{curr_txt}"
             )
             await open_msg.edit(
                 content=box(
@@ -4589,7 +4606,7 @@ class Adventure(BaseCog):
         else:
             chest_msg2 = (
                 f"The {user} found a {item}. (Attack: "
-                f"{str(item.att)}, Intelligence: {str(item.int)}, Charisma: {str(item.cha)}) [{slot}]"
+                f"{str(item.att)}, Intelligence: {str(item.int)}, Charisma: {str(item.cha)}) [{slot}]{curr_txt}"
             )
             await open_msg.edit(
                 content=box(
