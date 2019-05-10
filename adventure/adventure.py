@@ -4293,7 +4293,7 @@ class Adventure(BaseCog):
             msg = ""
         else:
             return (fumblelist, critlist, diplomacy, "")
-        fury_bonus, fury_user = await self._class_bonus("Berserker", session.fight, ["cha"])
+        fury_bonus, fury_user = await self._class_bonus("Berserker", session.talk, ["cha"])
         if fury_bonus > 0:
             msg += f"{bold(self.E(fury_user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"
         aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
