@@ -942,13 +942,47 @@ class Adventure(BaseCog):
             log.error("Error with the new character sheet", exc_info=True)
             return
 
-        item_list = list(i for x, i in c.backpack.items() if rarity.lower() in i.rarity)
+        loadout_msg = await ctx.send(
+            box(
+                f"{self.E(ctx.author.display_name)}, do you wish to sell items in your loadouts too?",
+                lang="css",
+            )
+        )
+        start_adding_reactions(loadout_msg, ReactionPredicate.YES_OR_NO_EMOJIS)
+        pred = ReactionPredicate.yes_or_no(loadout_msg, ctx.author)
+        try:
+            await ctx.bot.wait_for("reaction_add", check=pred, timeout=60)
+        except asyncio.TimeoutError:
+            await self._clear_react(loadout_msg)
+            return
+        try:
+            await loadout_msg.delete()
+        except discord.errors.Forbidden:
+            pass
+        if pred.result:  # user reacted with Yes.
+            item_list = list(i for x, i in c.backpack.items() if rarity.lower() in i.rarity)
+        else:  # no
+            # technically the items in backpack are not the same as those in loadouts so we have to rely on their name
+            # not the item itself
+            loadout_items = []
+            for l_name, loadout in c.loadouts.items():
+                for slot, data in loadout.items():
+                    if slot == "backpack":
+                        continue
+                    if not data:
+                        continue
+                    item = Item._from_json(data)
+                    if item not in loadout_items and rarity.lower() == item.rarity:
+                        loadout_items.append(item.name) 
+            item_list = list(i for x, i in c.backpack.items() if rarity.lower() in i.rarity and i.name not in loadout_items)
+
+        pred_txt = f"" if pred.result else f" that are not in loadouts"
         if not any(item_list):
             await ctx.send(
                 box(
                     (
                         f"{self.E(ctx.author.display_name)}, you do not have "
-                        f"any items of that rarity to sell."
+                        f"any items of that rarity to sell{pred_txt}."
                     ),
                     lang="css",
                 )
@@ -2811,7 +2845,6 @@ class Adventure(BaseCog):
         total_int = 0
         total_cha = 0
         for slot, data in userdata["items"].items():
-
             if slot == "backpack":
                 continue
             if last_slot == "two handed":
@@ -3440,7 +3473,7 @@ class Adventure(BaseCog):
                 new_amount = int(new_stat / self.MONSTERS[challenge][old_stat])
                 # can happen randomly, let's not add another boss if they can't take out first
                 if self.MONSTERS[challenge]["boss"]:
-                    old_msg = 0
+                    old_dmg = 0
                     old_talk = 0
                     for user in session.participants:
                         c = await Character._from_json(self.config, user)
@@ -4260,7 +4293,7 @@ class Adventure(BaseCog):
             msg = ""
         else:
             return (fumblelist, critlist, diplomacy, "")
-        fury_bonus, fury_user = await self._class_bonus("Berserker", session.fight, ["cha"])
+        fury_bonus, fury_user = await self._class_bonus("Berserker", session.talk, ["cha"])
         if fury_bonus > 0:
             msg += f"{bold(self.E(fury_user.display_name))}'s fury intimidates the enemy! *[🗨 +{fury_bonus}%]*\n"
         aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
