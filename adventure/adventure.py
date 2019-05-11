@@ -31,9 +31,9 @@ class Adventure(BaseCog):
         self.bot = bot
         self._last_trade = {}
 
-        self._adventure_actions = ["🗡", "🌟", "🗨", "🛐", "🏃"]
+        self._adventure_actions = ["🗡", "✨", "🗨", "🛐", "🏃"]
         self._adventure_run = ["🏃"]
-        self._adventure_controls = {"fight": "🗡", "magic": "🌟", "talk": "🗨", "pray": "🛐", "run": "🏃"}
+        self._adventure_controls = {"fight": "🗡", "magic": "✨", "talk": "🗨", "pray": "🛐", "run": "🏃"}
         self._order = [
             "head",
             "neck",
@@ -48,8 +48,8 @@ class Adventure(BaseCog):
             "ring",
             "charm",
         ]
-        self._group_actions = ["🗡", "🌟", "🗨", "🛐"]
-        self._group_controls = {"fight": "🗡", "magic": "🌟", "talk": "🗨", "pray": "🛐"}
+        self._group_actions = ["🗡", "✨", "🗨", "🛐"]
+        self._group_controls = {"fight": "🗡", "magic": "✨", "talk": "🗨", "pray": "🛐"}
         self._treasure_controls = {"✅": "equip", "❎": "backpack", "💰": "sell"}
         self._difficulties = {1: 0.6, 2: 0.7, 3: 0.8, 4: 0.9, 5: 1, 6: 1.1, 7: 1.2, 8: 1.3, 9: 1.4, 10: 1.5}
 
@@ -2067,7 +2067,7 @@ class Adventure(BaseCog):
                 (
                     f"{self.E(ctx.author.display_name)}, your forging roll was 🎲({roll}).\n"
                     f"The device you tinkered will have "
-                    f"{newatt * 2}🗡, {newdip * 2}🗨 and {newint * 2}🌟 and be {hand}."
+                    f"{newatt * 2}🗡, {newdip * 2}🗨 and {newint * 2}✨ and be {hand}."
                 )
             )
         else:
@@ -2075,7 +2075,7 @@ class Adventure(BaseCog):
                 (
                     f"{self.E(ctx.author.display_name)}, your forging roll was 🎲({roll}).\n"
                     "The device you tinkered will have "
-                    f"{newatt}🗡, {newdip}🗨 and {newint}🌟 and be {hand}."
+                    f"{newatt}🗡, {newdip}🗨 and {newint}✨ and be {hand}."
                 )
             )
         await ctx.send(
@@ -3198,7 +3198,7 @@ class Adventure(BaseCog):
                         hp_estim_precision += int(c.lvl / 2)
                         hp_estimate_list_names.append(self.E(user.display_name))
         if len(cha_estimate_list_names) > 0:
-            dipl = self.MONSTERS[challenge]["dipl"] * self.ATTRIBS[session.attribute][1] * session.amount
+            dipl = self.MONSTERS[session.challenge]["dipl"] * self.ATTRIBS[session.attribute][1] * session.amount
             cha_estim_error = 30 - cha_estim_precision #worst estimation leads to max 30% error
             min_cha_estimate = int(dipl * (1 - (cha_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
             max_cha_estimate = int(dipl * (1 + (cha_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
@@ -3208,7 +3208,7 @@ class Adventure(BaseCog):
                 f"and gauge{attrib} the enemy's charisma as **{min_cha_estimate} - {max_cha_estimate} diplomacy**.\n"
             )
         if len(hp_estimate_list_names) > 0:
-            hp = self.MONSTERS[challenge]["hp"] * self.ATTRIBS[session.attribute][0] * session.amount
+            hp = self.MONSTERS[session.challenge]["hp"] * self.ATTRIBS[session.attribute][0] * session.amount
             hp_estim_error = 30 - hp_estim_precision
             min_hp_estimate = int(hp * (1 - (hp_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
             max_hp_estimate = int(hp * (1 + (hp_estim_error / 100) * random.choice([0.5, 0.6, 0.7, 0.8, 0.9, 1])))
@@ -3867,7 +3867,7 @@ class Adventure(BaseCog):
             if stat_checks == ["att"]:
                 choice = "🗡"
             elif stat_checks == ["int"]:
-                choice = "🌟"
+                choice = "✨"
             elif stat_checks == ["cha"]:
                 choice = "🗨"
             else:
@@ -4059,7 +4059,7 @@ class Adventure(BaseCog):
                     msg+= f"Magic spells are **hugely effective** against this monster!"
                 if mdef != 1:
                     mult = 1/mdef
-                    msg+= f" *[🌟 x{mult:0.2f}]*\n"
+                    msg+= f" *[✨ x{mult:0.2f}]*\n"
             report = "Attack Party: "
         else:
             return (fumblelist, critlist, attack, magic, "")
@@ -4072,13 +4072,13 @@ class Adventure(BaseCog):
             msg += f"{bold(self.E(incision_user.display_name))} strikes precise incisions with his dagger! *[-{incision_bonus}% to 🗡 resistance]*\n"
         potion_bonus, potion_user = await self._class_bonus("Tinkerer", session.magic, ["int"])
         if potion_bonus > 0:
-            msg += f"{bold(self.E(potion_user.display_name))} crafted mana potion for the party! *[🌟 +{potion_bonus}%]*\n"
+            msg += f"{bold(self.E(potion_user.display_name))} crafted mana potion for the party! *[✨ +{potion_bonus}%]*\n"
         melody_bonus, melody_user = await self._class_bonus("Bard", session.magic, ["int", "cha"])
         if melody_bonus > 0:
-            msg += f"{bold(self.E(melody_user.display_name))} whispered a dissonant melody to the enemy, wracking it with terrible pain! *[-{melody_bonus}% to 🌟 resistance]*\n"
+            msg += f"{bold(self.E(melody_user.display_name))} whispered a dissonant melody to the enemy, wracking it with terrible pain! *[-{melody_bonus}% to ✨ resistance]*\n"
         aura_chance, bless_bonus, blessed_user = await self._cleric_bonus(session)
         if aura_chance > 0:
-            msg += f"A holy aura starts surrounding {bold(self.E(blessed_user.display_name))} while praying! *[+{aura_chance}% to 🗡/🌟 critical chance and 🗯️/⚡️ dmg]*\n"
+            msg += f"A holy aura starts surrounding {bold(self.E(blessed_user.display_name))} while praying! *[+{aura_chance}% to 🗡/✨ critical chance and 🗯️/⚡️ dmg]*\n"
         aura_bonus = int(aura_chance * 0.2)
         bless_display = f" +🛐{bless_bonus}" if bless_bonus != 0 else ""
 
@@ -4156,7 +4156,7 @@ class Adventure(BaseCog):
                     bonus = ability + str(bonus)
                     report += (
                         f"| {bold(self.E(user.display_name))}: "
-                        f"🎲({roll}) -💥{bonus} +🌟{str(int_value)}{bless_display} did **🌟{hero_dmg} dmg** | "
+                        f"🎲({roll}) -💥{bonus} +✨{str(int_value)}{bless_display} did **✨{hero_dmg} dmg** | "
                     )
                 if hero_dmg <= 0:
                     fumblelist.append(user)
@@ -4177,13 +4177,13 @@ class Adventure(BaseCog):
                 bonus = ability + str(bonus)
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +💥{bonus} +🌟{str(int_value)}{bless_display} did **🌟{hero_dmg} dmg** | "
+                    f"🎲({roll}) +💥{bonus} +✨{str(int_value)}{bless_display} did **✨{hero_dmg} dmg** | "
                 )
             else:
                 hero_dmg = int((roll + int_value + bless_bonus) * (1 + (potion_bonus / 100)) / (mdef * (1 - melody_bonus / 100)))
                 magic += hero_dmg
                 report += (
-                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +🌟{str(int_value)}{bless_display} did **🌟{hero_dmg} dmg** | "
+                    f"| {bold(self.E(user.display_name))}: 🎲({roll}) +✨{str(int_value)}{bless_display} did **✨{hero_dmg} dmg** | "
                 )
         
         for user in fumblelist:
@@ -4255,7 +4255,7 @@ class Adventure(BaseCog):
                     magic += contrib_magic
                     report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/🌟{contrib_magic}** | "
+                    f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/✨{contrib_magic}** | "
                     )
                 else: #no cleric's bonus activated and roll 1
                     msg += f"{bold(self.E(user.display_name))}'s prayers went unanswered by {god}.\n"
@@ -4271,11 +4271,11 @@ class Adventure(BaseCog):
                 magic += contrib_magic
                 report += (
                     f"| {bold(self.E(user.display_name))}: "
-                    f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/🌟{contrib_magic}** | "
+                    f"🎲({roll}) +🛐{str(pray_bonus)} did **🗡{contrib_attack}/🗨{contrib_diplomacy}/✨{contrib_magic}** | "
                 )
         header = "Pray Party: " if (attack + diplomacy + magic) != 0 else ""
         if len(bless_list_name) > 0:
-            bless_msg = f"The party is greatly inspired by {bold(humanize_list(bless_list_name))}! *[+{total_bless_bonus} to 🗡/🗨/🌟]*\n"
+            bless_msg = f"The party is greatly inspired by {bold(humanize_list(bless_list_name))}! *[+{total_bless_bonus} to 🗡/🗨/✨]*\n"
         else:
             bless_msg = ""
         pre_fight = await self._ability2_txt("pray", ability2_pray_list)
