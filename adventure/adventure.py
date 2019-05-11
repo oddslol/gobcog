@@ -3473,7 +3473,7 @@ class Adventure(BaseCog):
                 new_amount = int(new_stat / self.MONSTERS[challenge][old_stat])
                 # can happen randomly, let's not add another boss if they can't take out first
                 if self.MONSTERS[challenge]["boss"]:
-                    old_msg = 0
+                    old_dmg = 0
                     old_talk = 0
                     for user in session.participants:
                         c = await Character._from_json(self.config, user)
