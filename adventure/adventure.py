@@ -22,7 +22,12 @@ from .charsheet import Character, Item, GameSession, AdventureGroup, parse_timed
 BaseCog = getattr(commands, "Cog", object)
 
 log = logging.getLogger("red.adventure")
+listener = getattr(commands.Cog, "listener", None)
 
+if listener is None:
+
+    def listener(name=None):
+        return lambda x: x
 
 class Adventure(BaseCog):
     """Adventure, derived from the Goblins Adventure cog by locastan"""
@@ -3259,6 +3264,7 @@ class Adventure(BaseCog):
             plural = ""
         return challenge_updt, plural
 
+    @listener()
     async def on_reaction_add(self, reaction, user):
         """This will be a cog level reaction_add listener for game logic"""
         if user.bot:
@@ -4487,6 +4493,7 @@ class Adventure(BaseCog):
         epoch += seconds
         return epoch
 
+    @listener()
     async def on_message(self, message):
         if not message.guild:
             return
